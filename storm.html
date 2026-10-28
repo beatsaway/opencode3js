@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#03050c" />
+<title>ION STORM — Aether Labs</title>
+<meta name="description" content="A realtime procedural lightning storm: recursive bolts, branching discharges, GPU rain and a storm sea. WebGL2 / Three.js." />
+<style>
+  :root{
+    --accent:#9db8ff;
+    --accent2:#ffd27a;
+    --text:#e7ecff;
+    --dim:#7f8bab;
+    --line:rgba(157,184,255,.2);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#03050c}
+  body{font-family:var(--mono);color:var(--text);-webkit-font-smoothing:antialiased;user-select:none;touch-action:none;cursor:crosshair}
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .topnav{position:absolute;top:26px;left:30px;right:30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(157,184,255,.5);display:grid;place-items:center;transform:rotate(45deg);color:var(--accent);font-size:15px;background:rgba(12,16,30,.5);box-shadow:0 0 28px rgba(120,150,255,.22),inset 0 0 14px rgba(120,150,255,.12)}
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#f0f4ff}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .stats{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.18em;color:var(--dim);border:1px solid var(--line);padding:8px 11px;background:rgba(8,11,22,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .stats b{color:var(--accent);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats .sep{width:1px;height:9px;background:rgba(157,184,255,.2)}
+  .backlink{pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8px;letter-spacing:.22em;border:1px solid var(--line);padding:8px 11px;background:rgba(8,11,22,.45);transition:color .2s,border-color .2s}
+  .backlink:hover{color:var(--accent);border-color:rgba(157,184,255,.55)}
+
+  .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-size:8px;letter-spacing:.3em;color:rgba(200,212,240,.6);white-space:nowrap;text-shadow:0 1px 14px rgba(0,0,0,.9)}
+  .hint span{color:rgba(157,184,255,.85)}
+
+  .dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(600px,calc(100% - 36px));display:flex;align-items:center;gap:20px;padding:15px 18px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(12,17,32,.68),rgba(4,6,13,.56));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--accent);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(140,170,255,.5)}
+  input.slider{-webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;background:transparent;cursor:ew-resize;touch-action:none}
+  input.slider::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,rgba(157,184,255,.16),rgba(157,184,255,.6) 55%,rgba(255,210,122,.8))}
+  input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:#eef2ff;border:1px solid #fff;box-shadow:0 0 16px 3px rgba(150,175,255,.65),0 0 28px 6px rgba(255,210,122,.22)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(157,184,255,.2),rgba(255,210,122,.85))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#eef2ff;border:1px solid #fff}
+  .readout{flex:0 0 auto;text-align:right}
+  .readout .k{font-size:7px;letter-spacing:.22em;color:var(--dim)}
+  .readout .v{font-size:16px;letter-spacing:.06em;color:var(--accent);margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(140,170,255,.5)}
+
+  .scan{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:.12;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+  .vig{position:fixed;inset:0;z-index:7;pointer-events:none;background:radial-gradient(120% 92% at 50% 45%,transparent 48%,rgba(0,0,0,.7) 100%)}
+  .flash{position:fixed;inset:0;z-index:9;pointer-events:none;background:radial-gradient(46% 34% at 50% 30%,rgba(190,214,255,.75),transparent 72%);opacity:0;mix-blend-mode:screen}
+
+  #loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(700px 500px at 50% 45%,#0a1020,#04060e 65%,#02030a);transition:opacity .9s ease,visibility .9s}
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-inner{text-align:center;width:min(380px,76vw)}
+  .loader-ring{width:62px;height:62px;margin:0 auto 26px;border-radius:50%;border:1px solid rgba(157,184,255,.2);border-top-color:var(--accent);border-right-color:rgba(255,210,122,.8);box-shadow:0 0 40px rgba(130,160,255,.22);animation:spin 1.1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-title{font-size:9px;letter-spacing:.4em;color:#eef2ff;margin-bottom:16px}
+  .loader-bar{height:1px;background:rgba(157,184,255,.15);overflow:hidden}
+  .loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.3s ease-in-out infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(380%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+
+  @media (max-width:760px){
+    .topnav{top:18px;left:18px;right:18px}
+    .stats{display:none}
+    .brand h1{font-size:11px}
+    .dock{bottom:16px;gap:14px;padding:13px 14px}
+    .hint{bottom:108px;font-size:7px}
+    .readout .v{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Procedural lightning storm"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="mark"><span>ϟ</span></div>
+      <div>
+        <h1>ION STORM</h1>
+        <p>PROCEDURAL DISCHARGE · WEBGL2</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="stats">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span id="hud-strikes">0 STRIKES</span>
+        <span class="sep"></span>
+        <span>GPU RAIN</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="hint">CLICK TO CALL A STRIKE <span>· SPACE</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>STORM INTENSITY</span><b id="storm-val">060</b></div>
+      <input class="slider" id="storm" type="range" min="0" max="100" step="1" value="60" aria-label="Storm intensity" />
+    </div>
+    <div class="readout">
+      <div class="k">DISCHARGE</div>
+      <div class="v" id="storm-read">3.2 GV</div>
+    </div>
+  </div>
+</div>
+
+<div class="vig"></div>
+<div class="scan"></div>
+<div class="flash" id="flash"></div>
+
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-title">CHARGING THE CLOUD DECK</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>ION FIELD</span><span>∞</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+const flashEl = $('flash');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+renderer.setClearColor(0x03050c, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050811, 0.0075);
+
+const camera = new THREE.PerspectiveCamera(56, 1, 0.1, 4000);
+camera.position.set(0, 3.0, 25);
+camera.lookAt(0, 7.5, -50);
+
+const HORIZON_Y = -2.2;
+
+const rand = (a, b) => a + Math.random() * (b - a);
+
+/* =====================================================================
+   shared soft dot texture
+   ===================================================================== */
+function makeDotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,.55)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,.15)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const dotTex = makeDotTexture();
+
+/* =====================================================================
+   sky dome + cloud deck
+   ===================================================================== */
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uStrike: { value: 0 },
+    uStrikeDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uIntensity: { value: 0.6 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vDir;
+    void main(){
+      vDir = normalize(position);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vDir;
+    uniform float uTime;
+    uniform float uStrike;
+    uniform vec3 uStrikeDir;
+    uniform float uIntensity;
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+    float fbm(vec2 p){
+      float n = noise(p) * 0.55;
+      n += noise(p * 2.3 + 7.1) * 0.28;
+      n += noise(p * 5.1 - 3.7) * 0.15;
+      return n;
+    }
+
+    void main(){
+      float h = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);
+
+      vec3 low  = vec3(0.014, 0.018, 0.036);
+      vec3 high = vec3(0.007, 0.009, 0.024);
+      vec3 col = mix(low, high, smoothstep(0.45, 1.0, h));
+
+      col += vec3(0.026, 0.036, 0.068) * exp(-abs(vDir.y + 0.02) * 10.0) * (0.55 + uIntensity * 0.5);
+
+      vec2 uv = vec2(atan(vDir.z, vDir.x) * 1.5, vDir.y * 3.1 - uTime * 0.010);
+      float n = fbm(uv * 2.0);
+      float deck = smoothstep(0.03, 0.55, vDir.y) * smoothstep(0.26, 0.72, n);
+      col = mix(col, vec3(0.028, 0.036, 0.066), deck * 0.85);
+
+      float aim = max(dot(normalize(vDir), normalize(uStrikeDir)), 0.0);
+      float halo = pow(aim, 14.0);
+      col += vec3(0.42, 0.55, 0.95) * halo * (0.10 + deck * 0.8) * uStrike * 0.68;
+      col += vec3(0.10, 0.15, 0.34) * pow(aim, 4.0) * uStrike * 0.10;
+      col += vec3(0.02, 0.03, 0.07) * uStrike * 0.10;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+  side: THREE.BackSide,
+  depthWrite: false,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(320, 48, 32), skyMat);
+scene.add(sky);
+
+/* =====================================================================
+   storm sea
+   ===================================================================== */
+const seaMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uStrike: { value: 0 },
+    uStrikePos: { value: new THREE.Vector3(0, 0, -40) },
+    uFogColor: { value: new THREE.Vector3(0.034, 0.047, 0.088) },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vWorld;
+    void main(){
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorld = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vWorld;
+    uniform float uTime;
+    uniform float uStrike;
+    uniform vec3 uStrikePos;
+    uniform vec3 uFogColor;
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(41.7, 289.3))) * 35758.5453); }
+
+    void main(){
+      vec2 p = vWorld.xz;
+      float dist = length(p - cameraPosition.xz);
+      float chop = 1.0 - smoothstep(30.0, 170.0, dist);
+      float w = sin(p.y * 0.32 + uTime * 0.55) * 0.5 + sin(p.x * 0.19 - uTime * 0.4 + p.y * 0.07) * 0.5;
+      w += sin(p.y * 1.15 - uTime * 1.1) * 0.25;
+      vec3 base = vec3(0.010, 0.014, 0.028) + vec3(0.004, 0.006, 0.012) * w * chop;
+
+      float streak = exp(-abs(p.x - uStrikePos.x) * 0.055) * exp(-max(0.0, uStrikePos.z - p.y) * 0.016);
+
+      // soft wet reflection + crisscross sparkle
+      base += vec3(0.26, 0.36, 0.68) * streak * uStrike * 0.15;
+
+      float g1 = sin(p.x * 5.4 + p.y * 8.2 + uTime * 3.2);
+      float g2 = sin(p.x * 11.3 - p.y * 4.6 - uTime * 4.1);
+      float g3 = sin(p.x * 3.1 + p.y * 13.7 + uTime * 5.4);
+      float glit = pow(clamp(g1 * 0.4 + g2 * 0.35 + g3 * 0.25, 0.0, 1.0), 15.0);
+      float near = smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(55.0, 150.0, dist));
+      base += vec3(0.5, 0.62, 1.0) * streak * glit * near * uStrike * 0.45;
+
+      float fog = smoothstep(60.0, 430.0, dist);
+      base = mix(base, uFogColor, fog * 0.94);
+      gl_FragColor = vec4(base, 1.0);
+    }
+  `,
+});
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), seaMat);
+sea.rotation.x = -Math.PI / 2;
+sea.position.y = HORIZON_Y;
+scene.add(sea);
+
+/* =====================================================================
+   rain
+   ===================================================================== */
+const RAIN = 5200;
+const RAIN_H = 52;
+const rainGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(RAIN * 2 * 3);
+  const seed = new Float32Array(RAIN * 2);
+  const end = new Float32Array(RAIN * 2);
+  for (let i = 0; i < RAIN; i++) {
+    const s = Math.random();
+    const x = (Math.random() - 0.5) * 84;
+    const z = 8 - Math.random() * 96;
+    for (let k = 0; k < 2; k++) {
+      const j = i * 2 + k;
+      pos[j * 3] = x;
+      pos[j * 3 + 1] = 0;
+      pos[j * 3 + 2] = z;
+      seed[j] = s;
+      end[j] = k;
+    }
+  }
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  rainGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  rainGeo.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
+}
+const rainMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uSpeed: { value: 1 },
+    uIntensity: { value: 0.6 },
+    uStrike: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aSeed;
+    attribute float aEnd;
+    uniform float uTime;
+    uniform float uSpeed;
+    uniform float uIntensity;
+    uniform float uStrike;
+    varying float vA;
+    void main(){
+      float y = mod(aSeed * ${RAIN_H.toFixed(1)} - uTime * (22.0 + aSeed * 20.0) * uSpeed, ${RAIN_H.toFixed(1)});
+      vec3 p = position;
+      p.y = y + (${HORIZON_Y.toFixed(2)}) + aEnd * (0.45 + aSeed * 0.9);
+      p.x += sin(uTime * 0.35 + aSeed * 14.0) * 0.9;
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float dist = max(-mv.z, 1.0);
+      vA = (0.05 + 0.13 * aSeed) * uIntensity * smoothstep(0.0, 6.0, y) * (1.0 - smoothstep(50.0, 92.0, dist));
+      vA *= 1.0 + uStrike * 2.2;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying float vA;
+    void main(){ gl_FragColor = vec4(vec3(0.52, 0.66, 1.0), vA); }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const rain = new THREE.LineSegments(rainGeo, rainMat);
+rain.frustumCulled = false;
+scene.add(rain);
+
+/* =====================================================================
+   bolt ribbons (instanced billboards)
+   ===================================================================== */
+const SEG_MAX = 2200;
+const segStart = new Float32Array(SEG_MAX * 3);
+const segEnd = new Float32Array(SEG_MAX * 3);
+const segWidth = new Float32Array(SEG_MAX);
+
+const boltGeo = new THREE.InstancedBufferGeometry();
+boltGeo.setIndex([0, 1, 2, 2, 3, 1]);
+boltGeo.setAttribute('aCorner', new THREE.BufferAttribute(new Float32Array([
+  0, -1,  1, -1,  0, 1,  1, 1,
+]), 2));
+boltGeo.setAttribute('aStart', new THREE.InstancedBufferAttribute(segStart, 3));
+boltGeo.setAttribute('aEnd', new THREE.InstancedBufferAttribute(segEnd, 3));
+boltGeo.setAttribute('aWidth', new THREE.InstancedBufferAttribute(segWidth, 1));
+boltGeo.instanceCount = 0;
+
+const boltVert = /* glsl */`
+  attribute vec2 aCorner;
+  attribute vec3 aStart;
+  attribute vec3 aEnd;
+  attribute float aWidth;
+  uniform vec2 uRes;
+  uniform float uWidth;
+  uniform float uMaxPixels;
+  varying float vSide;
+  void main(){
+    vec4 cs = projectionMatrix * modelViewMatrix * vec4(aStart, 1.0);
+    vec4 ce = projectionMatrix * modelViewMatrix * vec4(aEnd, 1.0);
+    vec4 c = mix(cs, ce, aCorner.x);
+
+    vec2 ps = (cs.xy / max(cs.w, 0.001)) * uRes * 0.5;
+    vec2 pe = (ce.xy / max(ce.w, 0.001)) * uRes * 0.5;
+    vec2 dir = pe - ps;
+    float len = max(length(dir), 0.0001);
+    vec2 nrm = vec2(-dir.y, dir.x) / len;
+
+    float pixels = min(aWidth * uWidth, uMaxPixels);
+    c.xy += nrm * (pixels / (uRes * 0.5)) * aCorner.y * c.w;
+    gl_Position = c;
+    vSide = aCorner.y;
+  }
+`;
+const boltFrag = /* glsl */`
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  uniform float uPower;
+  varying float vSide;
+  void main(){
+    float edge = 1.0 - clamp(abs(vSide), 0.0, 1.0);
+    float a = pow(edge, uPower) * uOpacity;
+    if (a < 0.002) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+`;
+
+function makeBoltMaterial(color, width, power, maxPixels) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uWidth: { value: width },
+      uMaxPixels: { value: maxPixels },
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: 0 },
+      uPower: { value: power },
+    },
+    vertexShader: boltVert,
+    fragmentShader: boltFrag,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
+const boltGlowMat = makeBoltMaterial(0x5f97ff, 9.5, 2.4, 130);
+const boltCoreMat = makeBoltMaterial(0xf4f9ff, 2.1, 1.5, 46);
+
+const boltGlow = new THREE.Mesh(boltGeo, boltGlowMat);
+const boltCore = new THREE.Mesh(boltGeo, boltCoreMat);
+boltGlow.frustumCulled = false;
+boltCore.frustumCulled = false;
+scene.add(boltGlow);
+scene.add(boltCore);
+
+/* impact glow on the sea */
+const impact = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: dotTex,
+  color: 0x9fc4ff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+impact.scale.set(26, 9, 1);
+impact.position.y = HORIZON_Y + 0.6;
+scene.add(impact);
+
+/* impact ring on the sea */
+const ringMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uR: { value: 0 },
+    uOpacity: { value: 0 },
+    uColor: { value: new THREE.Color(0x8fbcff) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    varying vec2 vUv;
+    uniform float uR;
+    uniform float uOpacity;
+    uniform vec3 uColor;
+    void main(){
+      float d = length(vUv - 0.5) * 2.0;
+      float ring = smoothstep(0.10, 0.0, abs(d - uR)) * smoothstep(1.0, 0.7, d);
+      float core = smoothstep(0.25, 0.0, d) * (1.0 - smoothstep(0.0, 0.6, uR));
+      gl_FragColor = vec4(uColor, (ring * 0.7 + core * 0.5) * uOpacity);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const impactRing = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), ringMat);
+impactRing.rotation.x = -Math.PI / 2;
+impactRing.position.y = HORIZON_Y + 0.03;
+impactRing.scale.set(34, 34, 1);
+scene.add(impactRing);
+
+/* impact sparks */
+const SPARK_N = 180;
+const sparkPos = new Float32Array(SPARK_N * 3);
+const sparkVel = new Float32Array(SPARK_N * 3);
+const sparkLife = new Float32Array(SPARK_N);
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+sparkGeo.setAttribute('aLife', new THREE.BufferAttribute(sparkLife, 1));
+const sparkMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTex: { value: dotTex },
+    uOpacity: { value: 1 },
+    uSize: { value: 0.55 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aLife;
+    uniform float uSize;
+    uniform float uPixelRatio;
+    varying float vA;
+    void main(){
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = uSize * uPixelRatio * (130.0 / max(-mv.z, 1.0)) * (0.35 + aLife);
+      vA = aLife;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform sampler2D uTex;
+    uniform float uOpacity;
+    varying float vA;
+    void main(){
+      vec4 t = texture2D(uTex, gl_PointCoord);
+      float a = t.a * vA * uOpacity;
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(vec3(0.75, 0.88, 1.0), a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const sparks = new THREE.Points(sparkGeo, sparkMat);
+sparks.frustumCulled = false;
+scene.add(sparks);
+
+/* =====================================================================
+   bolt generation
+   ===================================================================== */
+const segs = [];
+const FORK_DEPTH = 7;
+const FORK_JITTER = 5.2;
+
+function growBolt(a, b, depth, jitter, width, out) {
+  if (depth <= 0) {
+    out.push({ a: a.clone(), b: b.clone(), w: width });
+    return;
+  }
+  const m = a.clone().lerp(b, 0.5);
+  m.x += (Math.random() - 0.5) * jitter;
+  m.y += (Math.random() - 0.5) * jitter * 0.5;
+  m.z += (Math.random() - 0.5) * jitter * 0.85;
+  growBolt(a, m, depth - 1, jitter * 0.55, width, out);
+  growBolt(m, b, depth - 1, jitter * 0.55, width, out);
+}
+
+let strikeCount = 0;
+const strikeTop = new THREE.Vector3();
+const strikeHit = new THREE.Vector3();
+
+function generateStrike(xTarget, zTarget) {
+  segs.length = 0;
+
+  const top = new THREE.Vector3(
+    xTarget + rand(-7, 7),
+    28 + rand(-1.5, 1.5),
+    zTarget + rand(-6, 6)
+  );
+  const bottom = new THREE.Vector3(
+    xTarget + rand(-2.5, 2.5),
+    HORIZON_Y,
+    zTarget + rand(-3, 3)
+  );
+  strikeTop.copy(top);
+  strikeHit.copy(bottom);
+
+  growBolt(top, bottom, FORK_DEPTH, FORK_JITTER, 1.0, segs);
+  const trunkCount = segs.length;
+
+  const forks = 3 + Math.floor(Math.random() * 4);
+  for (let f = 0; f < forks; f++) {
+    const idx = Math.floor(trunkCount * rand(0.12, 0.78));
+    const from = segs[idx].a.clone();
+    const away = new THREE.Vector3(from.x - bottom.x, 0, from.z - bottom.z);
+    if (away.lengthSq() < 0.01) away.set(rand(-1, 1), 0, rand(-1, 1));
+    away.normalize();
+    const dir = new THREE.Vector3(
+      away.x * rand(0.35, 1.25),
+      -rand(0.45, 1.5),
+      away.z * rand(0.35, 1.25)
+    ).normalize();
+    const to = from.clone().addScaledVector(dir, rand(6.5, 17));
+    const branch = [];
+    growBolt(from, to, 4, 2.4, rand(0.42, 0.68), branch);
+    const n = branch.length;
+    branch.forEach((s, i) => {
+      s.w *= 1.0 - (i / n) * 0.45;
+      segs.push(s);
+    });
+
+    if (Math.random() < 0.55) {
+      const pivot = branch[Math.floor(branch.length * rand(0.25, 0.7))].a.clone();
+      const dir2 = new THREE.Vector3(rand(-1, 1), -rand(0.3, 1.2), rand(-1, 1)).normalize();
+      const to2 = pivot.clone().addScaledVector(dir2, rand(3, 7.5));
+      growBolt(pivot, to2, 3, 1.2, rand(0.18, 0.3), segs);
+    }
+  }
+
+  const n = Math.min(segs.length, SEG_MAX);
+  for (let i = 0; i < n; i++) {
+    const s = segs[i];
+    segStart[i * 3] = s.a.x;
+    segStart[i * 3 + 1] = s.a.y;
+    segStart[i * 3 + 2] = s.a.z;
+    segEnd[i * 3] = s.b.x;
+    segEnd[i * 3 + 1] = s.b.y;
+    segEnd[i * 3 + 2] = s.b.z;
+    segWidth[i] = s.w;
+  }
+  boltGeo.instanceCount = n;
+  boltGeo.attributes.aStart.needsUpdate = true;
+  boltGeo.attributes.aEnd.needsUpdate = true;
+  boltGeo.attributes.aWidth.needsUpdate = true;
+
+  /* strike lighting targets */
+  skyMat.uniforms.uStrikeDir.value.copy(top).sub(camera.position).normalize();
+  seaMat.uniforms.uStrikePos.value.set(bottom.x, 0, bottom.z);
+  impact.position.set(bottom.x, HORIZON_Y + 0.6, bottom.z);
+  impact.scale.set(rand(22, 34), rand(7, 11), 1);
+  impactRing.position.set(bottom.x, HORIZON_Y + 0.03, bottom.z);
+
+  /* sparks */
+  for (let i = 0; i < SPARK_N; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = rand(2.5, 13);
+    sparkPos[i * 3] = bottom.x + rand(-1, 1);
+    sparkPos[i * 3 + 1] = HORIZON_Y + 0.15;
+    sparkPos[i * 3 + 2] = bottom.z + rand(-1, 1);
+    sparkVel[i * 3] = Math.cos(a) * sp;
+    sparkVel[i * 3 + 1] = rand(2, 11);
+    sparkVel[i * 3 + 2] = Math.sin(a) * sp;
+    sparkLife[i] = rand(0.35, 1.0);
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+  sparkGeo.attributes.aLife.needsUpdate = true;
+
+  strikeCount++;
+  $('hud-strikes').textContent = strikeCount + (strikeCount === 1 ? ' STRIKE' : ' STRIKES');
+  scope.bolt = 1;
+  scope.flash = 1;
+  scope.ring = 1;
+  scope.shake = 1;
+}
+
+/* =====================================================================
+   post processing
+   ===================================================================== */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.52, 0.5, 0.68);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const finalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 c = vUv - 0.5;
+      vec2 off = c * 0.0019 * (0.4 + dot(c, c) * 2.4);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + off).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - off).b;
+      col += (rand(vUv * uRes + fract(uTime)) - 0.5) * 0.028;
+      col *= 1.0 - 0.04 * (0.5 + 0.5 * sin(vUv.y * uRes.y * 1.4));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const finalPass = new ShaderPass(finalShader);
+composer.addPass(finalPass);
+
+/* =====================================================================
+   state + slider
+   ===================================================================== */
+const scope = { bolt: 0, flash: 0, ring: 0, shake: 0 };
+let intensity = 0.6;
+let autoTimer = 0;
+let nextStrike = 3.4;
+
+const stormEl = $('storm');
+const stormValEl = $('storm-val');
+const stormReadEl = $('storm-read');
+
+function applyIntensity(v) {
+  intensity = v / 100;
+  stormValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  stormReadEl.textContent = (0.8 + intensity * 4.2).toFixed(1) + ' GV';
+  rainMat.uniforms.uIntensity.value = 0.3 + intensity * 1.05;
+  rainMat.uniforms.uSpeed.value = 0.55 + intensity * 1.15;
+  skyMat.uniforms.uIntensity.value = intensity;
+  bloom.strength = 0.34 + intensity * 0.3;
+  nextStrike = THREE.MathUtils.lerp(7.5, 1.15, intensity);
+}
+stormEl.addEventListener('input', () => applyIntensity(Number(stormEl.value)));
+applyIntensity(Number(stormEl.value));
+
+/* =====================================================================
+   sizing
+   ===================================================================== */
+let w = 1, h = 1, dpr = 1;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 1.8);
+  w = window.innerWidth;
+  h = window.innerHeight;
+
+  renderer.setPixelRatio(dpr);
+  composer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+
+  const buf = new THREE.Vector2();
+  renderer.getDrawingBufferSize(buf);
+  finalPass.uniforms.uRes.value.copy(buf);
+  boltGlowMat.uniforms.uRes.value.copy(buf);
+  boltCoreMat.uniforms.uRes.value.copy(buf);
+  boltGlowMat.uniforms.uWidth.value = 9.5 * dpr;
+  boltCoreMat.uniforms.uWidth.value = 2.1 * dpr;
+  sparkMat.uniforms.uPixelRatio.value = dpr;
+}
+window.addEventListener('resize', resize);
+
+/* =====================================================================
+   input
+   ===================================================================== */
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / w - 0.5) * 2;
+  pointer.ty = -(e.clientY / h - 0.5) * 2;
+}, { passive: true });
+
+function strikeAt(clientX) {
+  const nx = (clientX / w - 0.5) * 2;
+  generateStrike(nx * 20, -34 - Math.random() * 26);
+  autoTimer = 0;
+}
+
+canvas.addEventListener('pointerdown', (e) => strikeAt(e.clientX));
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    strikeAt(w * (0.3 + Math.random() * 0.4));
+  }
+});
+
+/* =====================================================================
+   loop
+   ===================================================================== */
+const clock = new THREE.Clock();
+let elapsed = 0, fps = 60, frames = 0, acc = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 2.0);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 2.0);
+
+  autoTimer += dt;
+  if (autoTimer > nextStrike) strikeAt(w * (0.18 + Math.random() * 0.64));
+
+  scope.bolt = Math.max(0, scope.bolt - dt * 2.4);
+  scope.flash = Math.max(0, scope.flash - dt * 1.9);
+  scope.ring = Math.max(0, scope.ring - dt * 1.5);
+  scope.shake = Math.max(0, scope.shake - dt * 3.2);
+
+  /* bolt flicker envelope: hard strike, rapid stutter, fast decay */
+  const stutter = 0.72 + 0.28 * Math.sin(elapsed * 96.0 + Math.sin(elapsed * 41.0) * 2.0);
+  const boltA = scope.bolt * stutter;
+  boltCoreMat.uniforms.uOpacity.value = boltA;
+  boltGlowMat.uniforms.uOpacity.value = boltA * 0.34;
+
+  const flashA = Math.pow(scope.flash, 1.4);
+  skyMat.uniforms.uStrike.value = flashA * 0.9;
+  seaMat.uniforms.uStrike.value = flashA;
+  impact.material.opacity = flashA * 0.42;
+  impactRing.material.uniforms.uR.value = 1.0 - scope.ring;
+  impactRing.material.uniforms.uOpacity.value = scope.ring * 0.45;
+  flashEl.style.opacity = String(flashA * 0.075);
+  sparkMat.uniforms.uOpacity.value = Math.min(1, scope.flash * 1.6);
+
+  /* sparks */
+  const drag = 1 - Math.min(1, dt * 1.9);
+  for (let i = 0; i < SPARK_N; i++) {
+    if (sparkLife[i] <= 0) continue;
+    sparkLife[i] = Math.max(0, sparkLife[i] - dt * 1.25);
+    sparkPos[i * 3] += sparkVel[i * 3] * dt;
+    sparkPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt;
+    sparkPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
+    sparkVel[i * 3] *= drag;
+    sparkVel[i * 3 + 2] *= drag;
+    sparkVel[i * 3 + 1] -= 16 * dt;
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+  sparkGeo.attributes.aLife.needsUpdate = true;
+
+  /* camera drift + impact shake */
+  const shake = scope.shake * 0.35;
+  camera.position.x += ((pointer.x * 1.6 + Math.sin(elapsed * 0.19) * 0.5) - camera.position.x) * Math.min(1, dt * 1.4);
+  camera.position.y += ((3.0 + pointer.y * 0.8 + Math.sin(elapsed * 0.16) * 0.22) - camera.position.y) * Math.min(1, dt * 1.4);
+  camera.position.z = 25;
+  camera.lookAt(
+    Math.sin(elapsed * 0.11) * 1.1 + (Math.random() - 0.5) * shake,
+    7.5 + (Math.random() - 0.5) * shake,
+    -50
+  );
+
+  skyMat.uniforms.uTime.value = elapsed;
+  seaMat.uniforms.uTime.value = elapsed;
+  rainMat.uniforms.uTime.value = elapsed;
+  rainMat.uniforms.uStrike.value = flashA * 0.9;
+  finalPass.uniforms.uTime.value = elapsed;
+
+  composer.render();
+
+  frames++;
+  acc += dt;
+  if (acc >= 0.5) {
+    fps = frames / acc;
+    $('hud-fps').textContent = fps.toFixed(0);
+    $('hud-fps').style.color = fps >= 48 ? '#b9c9ff' : '#ff8f8f';
+    frames = 0;
+    acc = 0;
+  }
+}
+
+function init() {
+  resize();
+  renderer.compile(scene, camera);
+  composer.render();
+  tick();
+  window.setTimeout(() => loader.classList.add('hidden'), 480);
+  window.setTimeout(() => strikeAt(w * 0.5), 1300);
+}
+init();
+</script>
+</body>
+</html>

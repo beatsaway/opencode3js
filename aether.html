@@ -1,0 +1,1886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#03060c" />
+<title>AETHER CORE — Realtime VFX Showcase</title>
+<meta name="description" content="A single-file Three.js realtime VFX showcase: GPU particle vortex, energy core, shockwaves, bloom and screen-space post FX." />
+<style>
+  :root{
+    --cyan:#6ff2ff;
+    --violet:#a986ff;
+    --amber:#ffc26b;
+    --text:#d7ecf7;
+    --dim:#6d8ba0;
+    --line:rgba(110,220,255,.18);
+    --panel:rgba(6,12,21,.52);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#02040a}
+  body{
+    font-family:var(--mono);
+    color:var(--text);
+    background:
+      radial-gradient(1100px 700px at 50% 38%, #08131f 0%, #040810 52%, #010206 100%);
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+    touch-action:none;
+    cursor:crosshair;
+  }
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  /* ---------- HUD frame ---------- */
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .corner{position:absolute;width:34px;height:34px;border:1px solid rgba(120,235,255,.35);opacity:.7}
+  .corner.tl{top:14px;left:14px;border-right:0;border-bottom:0}
+  .corner.tr{top:14px;right:14px;border-left:0;border-bottom:0}
+  .corner.bl{bottom:14px;left:14px;border-right:0;border-top:0}
+  .corner.br{bottom:14px;right:14px;border-left:0;border-top:0}
+
+  .topbar{position:absolute;top:28px;left:32px;right:32px;display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand-mark{
+    width:38px;height:38px;flex:0 0 38px;border:1px solid rgba(111,242,255,.45);
+    display:grid;place-items:center;color:var(--cyan);font-size:17px;
+    transform:rotate(45deg);background:rgba(10,26,40,.45);
+    box-shadow:0 0 24px rgba(80,220,255,.22), inset 0 0 14px rgba(80,220,255,.15);
+    animation:markPulse 3.6s ease-in-out infinite;
+  }
+  .brand-mark span{transform:rotate(-45deg);display:block}
+  @keyframes markPulse{50%{box-shadow:0 0 38px rgba(120,235,255,.42), inset 0 0 20px rgba(120,235,255,.25)}}
+  .brand h1{
+    font-size:19px;letter-spacing:.34em;font-weight:600;line-height:1;
+    background:linear-gradient(92deg,#eafcff 0%,var(--cyan) 44%,var(--violet) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 26px rgba(90,220,255,.25);
+  }
+  .brand h1 em{font-style:normal;opacity:.55;margin:0 .18em}
+  .brand p{margin-top:7px;font-size:8.5px;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}
+
+  .telemetry{
+    min-width:212px;padding:13px 15px 11px;border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(10,20,32,.62),rgba(4,9,16,.48));
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 18px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(180,240,255,.06);
+    position:relative;
+  }
+  .telemetry::before{content:"";position:absolute;left:-1px;top:-1px;width:26px;height:1px;background:var(--cyan);opacity:.75}
+  .telemetry::after{content:"";position:absolute;right:-1px;bottom:-1px;width:26px;height:1px;background:var(--violet);opacity:.75}
+  .panel-title{display:flex;justify-content:space-between;align-items:center;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:10px}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:blink 1.6s steps(2,end) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:3.5px 0;font-size:9.5px;letter-spacing:.1em}
+  .row .k{color:var(--dim)}
+  .row .v{color:#c9f2ff;font-variant-numeric:tabular-nums;text-shadow:0 0 12px rgba(90,220,255,.35)}
+  .row .v.good{color:#7dffc4}
+  .row .v.warn{color:var(--amber)}
+
+  /* ---------- center reticle ---------- */
+  .reticle{position:absolute;left:50%;top:50%;width:104px;height:104px;transform:translate(-50%,-50%);opacity:.5}
+  .reticle .ring{position:absolute;inset:0;border:1px solid rgba(120,235,255,.22);border-radius:50%}
+  .reticle .ring.inner{inset:38px;border-color:rgba(120,235,255,.28);background:radial-gradient(circle,rgba(111,242,255,.12),transparent 70%)}
+  .reticle .ring.dash{
+    inset:12px;border-style:dashed;border-color:rgba(170,140,255,.28);
+    animation:spin 22s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .reticle i{position:absolute;background:rgba(140,240,255,.55);box-shadow:0 0 8px rgba(90,220,255,.55)}
+  .reticle i.t{left:50%;top:-6px;width:1px;height:11px;transform:translateX(-50%)}
+  .reticle i.b{left:50%;bottom:-6px;width:1px;height:11px;transform:translateX(-50%)}
+  .reticle i.l{top:50%;left:-6px;height:1px;width:11px;transform:translateY(-50%)}
+  .reticle i.r{top:50%;right:-6px;height:1px;width:11px;transform:translateY(-50%)}
+
+  /* ---------- bottom bar ---------- */
+  .bottombar{position:absolute;left:32px;right:32px;bottom:30px;display:flex;justify-content:space-between;align-items:flex-end;gap:22px}
+  .card{
+    border:1px solid var(--line);background:linear-gradient(180deg,rgba(10,20,32,.58),rgba(4,9,16,.44));
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 18px 50px rgba(0,0,0,.3), inset 0 1px 0 rgba(180,240,255,.06);
+    padding:12px 15px;position:relative;
+  }
+  .charge-card{min-width:230px}
+  .label{font-size:8px;letter-spacing:.26em;color:var(--dim);display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}
+  .label b{font-weight:400;color:var(--cyan);letter-spacing:.18em}
+  .pips{display:flex;gap:6px}
+  .pip{width:100%;height:9px;flex:1;background:rgba(120,220,255,.08);border:1px solid rgba(120,220,255,.18);position:relative;overflow:hidden}
+  .pip::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,var(--cyan),var(--violet));opacity:0;transform:scaleX(.2);transform-origin:left;transition:opacity .18s,transform .28s}
+  .pip.on::after{opacity:1;transform:scaleX(1)}
+  .pip.on{border-color:rgba(120,235,255,.7);box-shadow:0 0 14px rgba(90,220,255,.28)}
+  .charge-meta{display:flex;justify-content:space-between;align-items:center;margin-top:9px;font-size:8px;letter-spacing:.2em;color:var(--dim)}
+  .status{color:#7dffc4;text-shadow:0 0 10px rgba(90,255,180,.4)}
+  .status.hot{color:var(--amber);text-shadow:0 0 10px rgba(255,190,100,.45)}
+
+  .hint{display:flex;align-items:center;gap:12px;font-size:9px;letter-spacing:.22em;color:var(--dim);padding-bottom:4px}
+  .key{
+    display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid rgba(120,220,255,.28);
+    color:#c9f2ff;background:rgba(8,18,30,.55);font-size:9px;letter-spacing:.18em;
+    box-shadow:inset 0 0 18px rgba(70,200,255,.07);
+  }
+  .key .tri{color:var(--cyan);font-size:8px}
+  .hint .sub{color:rgba(120,160,185,.62);white-space:nowrap}
+  .hint > span{white-space:nowrap}
+
+  .controls{display:flex;align-items:center;gap:8px}
+  .seg{display:flex;border:1px solid rgba(120,220,255,.2);background:rgba(6,12,21,.5)}
+  .seg button{
+    appearance:none;border:0;background:transparent;color:var(--dim);font-family:var(--mono);
+    font-size:8px;letter-spacing:.18em;padding:8px 10px;cursor:pointer;pointer-events:auto;
+    transition:color .2s,background .2s,box-shadow .2s;
+  }
+  .seg button:hover{color:#dff8ff;background:rgba(90,220,255,.07)}
+  .seg button.active{color:#031018;background:linear-gradient(180deg,#9df5ff,#55d6f0);box-shadow:0 0 18px rgba(90,220,255,.35);font-weight:700}
+  .icon-btn{
+    appearance:none;width:32px;height:32px;border:1px solid rgba(120,220,255,.2);background:rgba(6,12,21,.5);
+    color:var(--dim);font-family:var(--mono);font-size:10px;cursor:pointer;pointer-events:auto;
+    display:grid;place-items:center;transition:color .2s,border-color .2s;
+  }
+  .icon-btn:hover{color:var(--cyan);border-color:rgba(120,235,255,.55)}
+  .icon-btn.muted{color:rgba(255,140,140,.8);border-color:rgba(255,120,120,.3)}
+
+  /* ---------- overlay ---------- */
+  .banner{
+    position:absolute;left:50%;top:27%;transform:translate(-50%,-50%) scale(.94);
+    font-size:clamp(20px,4.6vw,54px);letter-spacing:.42em;font-weight:600;white-space:nowrap;
+    color:#f2feff;text-shadow:0 0 32px rgba(120,235,255,.85),0 0 90px rgba(140,90,255,.6);
+    opacity:0;pointer-events:none;text-align:center;
+  }
+  .banner small{display:block;font-size:9px;letter-spacing:.5em;color:var(--cyan);margin-top:14px;opacity:.8}
+  .banner.show{animation:banner 1.5s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes banner{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(1.18);filter:blur(8px)}
+    14%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:blur(0)}
+    70%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(.97);filter:blur(2px)}
+  }
+
+  /* ---------- loader ---------- */
+  #loader{
+    position:fixed;inset:0;z-index:40;display:grid;place-items:center;
+    background:
+      radial-gradient(800px 500px at 50% 45%, #071523 0%, #030710 55%, #010204 100%);
+    transition:opacity .8s ease, visibility .8s;
+  }
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-grid{
+    position:absolute;inset:0;opacity:.16;
+    background-image:linear-gradient(rgba(90,200,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(90,200,255,.16) 1px,transparent 1px);
+    background-size:64px 64px;
+    mask-image:radial-gradient(circle at 50% 50%,#000 0%,transparent 68%);
+    -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,transparent 68%);
+  }
+  .loader-inner{position:relative;width:min(420px,76vw);text-align:center}
+  .loader-mark{
+    width:54px;height:54px;margin:0 auto 28px;border:1px solid rgba(111,242,255,.5);
+    display:grid;place-items:center;color:var(--cyan);font-size:20px;transform:rotate(45deg);
+    box-shadow:0 0 40px rgba(90,220,255,.3),inset 0 0 22px rgba(90,220,255,.15);
+    animation:loaderSpin 4.5s linear infinite;
+  }
+  .loader-mark span{transform:rotate(-45deg);display:block;animation:loaderSpin 4.5s linear infinite reverse}
+  @keyframes loaderSpin{to{transform:rotate(405deg)}}
+  .loader-title{font-size:10px;letter-spacing:.4em;color:#cfeaf6;margin-bottom:18px}
+  .loader-bar{height:2px;background:rgba(110,220,255,.12);overflow:hidden;position:relative}
+  .loader-bar i{position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--cyan),var(--violet),transparent);transform:translateX(-100%);animation:sweep 1.5s ease-in-out infinite}
+  @keyframes sweep{to{transform:translateX(100%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+  .loader-meta b{color:var(--cyan);font-weight:400}
+
+  .scanlines{position:fixed;inset:0;z-index:12;pointer-events:none;opacity:.14;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.045) 0 1px,transparent 1px 3px)}
+  .vignette-ui{position:fixed;inset:0;z-index:11;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%)}
+
+  @media (max-width:820px){
+    .topbar{top:18px;left:18px;right:18px}
+    .brand h1{font-size:15px;letter-spacing:.24em}
+    .brand p{font-size:7px;letter-spacing:.2em}
+    .brand-mark{width:32px;height:32px;flex-basis:32px;font-size:14px}
+  }
+
+  /* ---------- simplified dock UI ---------- */
+  .topnav{
+    position:absolute;top:28px;left:32px;right:32px;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:24px;
+  }
+  .nav-right{display:flex;align-items:center;gap:20px}
+  .stats{
+    display:flex;align-items:center;gap:10px;font-size:8.5px;letter-spacing:.18em;
+    color:var(--dim);border:1px solid var(--line);padding:8px 12px;
+    background:rgba(6,12,21,.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .stats b{color:var(--cyan);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats b.good{color:#7dffc4}
+  .stats b.warn{color:var(--amber)}
+  .stats b.bad{color:#ff7f7f}
+  .stats .sep{width:1px;height:9px;background:rgba(110,220,255,.2)}
+  .backlink{
+    pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8.5px;letter-spacing:.22em;
+    border:1px solid var(--line);padding:8px 12px;background:rgba(6,12,21,.4);
+    transition:color .2s,border-color .2s,background .2s;
+  }
+  .backlink:hover{color:var(--cyan);border-color:rgba(110,235,255,.5);background:rgba(20,40,58,.5)}
+
+  .hint{
+    position:absolute;left:50%;bottom:124px;transform:translateX(-50%);
+    font-size:8px;letter-spacing:.3em;color:rgba(196,228,242,.82);
+    white-space:nowrap;text-align:center;
+    text-shadow:0 1px 12px rgba(0,0,0,.85),0 0 26px rgba(0,0,0,.6);
+  }
+  .hint span{color:rgba(111,242,255,.7)}
+
+  .dock{
+    position:absolute;left:50%;bottom:28px;transform:translateX(-50%);
+    width:min(720px,calc(100% - 40px));
+    display:flex;align-items:center;gap:24px;padding:15px 18px;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(10,20,32,.66),rgba(4,9,16,.52));
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 22px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(180,240,255,.08);
+    pointer-events:auto;
+  }
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--cyan);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(90,220,255,.4)}
+  input.slider{
+    -webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;
+    background:transparent;cursor:ew-resize;touch-action:none;
+  }
+  input.slider::-webkit-slider-runnable-track{
+    height:2px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(111,242,255,.18),rgba(111,242,255,.55) 55%,rgba(169,134,255,.7));
+  }
+  input.slider::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;
+    background:#e8fdff;border:1px solid #fff;
+    box-shadow:0 0 14px 3px rgba(90,230,255,.55),0 0 26px 6px rgba(140,90,255,.22);
+    transition:transform .15s ease;
+  }
+  input.slider:hover::-webkit-slider-thumb{transform:scale(1.18)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(111,242,255,.2),rgba(169,134,255,.7))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#e8fdff;border:1px solid #fff;box-shadow:0 0 14px 3px rgba(90,230,255,.55)}
+
+  .dock-side{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .charge-mini{display:flex;align-items:center;gap:8px}
+  .micro{font-size:7.5px;letter-spacing:.22em;color:var(--dim)}
+  .charge-mini .pips{display:flex;gap:3px}
+  .charge-mini .pip{width:13px;height:5px;flex:0 0 auto;background:rgba(120,220,255,.08);border:1px solid rgba(120,220,255,.18)}
+  .charge-mini .pip.on{background:linear-gradient(90deg,var(--cyan),var(--violet));border-color:rgba(120,235,255,.7);box-shadow:0 0 10px rgba(90,220,255,.35)}
+  .charge-mini .num{color:var(--cyan)}
+
+  @media (max-width:820px){
+    .topnav{top:18px;left:18px;right:18px;align-items:flex-start}
+    .nav-right{gap:10px}
+    .stats{display:none}
+    .dock{bottom:16px;width:calc(100% - 24px);flex-wrap:wrap;gap:14px;padding:13px 14px}
+    .slider-wrap{flex:1 0 100%}
+    .dock-side{width:100%;justify-content:space-between}
+    .hint{bottom:148px;font-size:7px;letter-spacing:.24em}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene" aria-label="Realtime 3D VFX scene"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark"><span>◇</span></div>
+      <div>
+        <h1>AETHER<em>//</em>CORE</h1>
+        <p>Realtime VFX · WebGL2</p>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <div class="stats" aria-label="Render telemetry">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span id="hud-parts">74.8K</span>
+        <span class="sep"></span>
+        <span id="hud-quality">HIGH</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="banner" id="banner">CORE OVERLOAD<small>AETHER PURGE PROTOCOL</small></div>
+
+  <div class="hint">CLICK / TAP TO DETONATE <span>· SPACE</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>VFX INTENSITY</span><b id="intensity-val">060</b></div>
+      <input class="slider" id="intensity" type="range" min="0" max="100" step="1" value="60" aria-label="VFX intensity" />
+    </div>
+
+    <div class="dock-side">
+      <div class="charge-mini">
+        <span class="micro">CORE</span>
+        <div class="pips" id="pips">
+          <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+        </div>
+        <span class="micro num" id="charge-num">0/5</span>
+        <span class="status" id="status" hidden>STABLE</span>
+      </div>
+      <button class="icon-btn" id="sound-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
+      <button class="icon-btn" id="auto-btn" type="button" title="Toggle auto detonation" aria-label="Toggle auto detonation">A</button>
+    </div>
+  </div>
+</div>
+
+<div class="vignette-ui"></div>
+<div class="scanlines"></div>
+
+<div id="loader">
+  <div class="loader-grid"></div>
+  <div class="loader-inner">
+    <div class="loader-mark"><span>◇</span></div>
+    <div class="loader-title">CALIBRATING AETHER CORE</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>NEURAL VFX PIPELINE</span><b id="load-pct">000</b></div>
+  </div>
+</div>
+
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;color:#8fd8ff;font-family:monospace">JavaScript is required for this experience.</p></noscript>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* =====================================================================
+   0. BOOT / DOM
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+const loadPct = $('load-pct');
+
+let loadValue = 0;
+const loadTimer = setInterval(() => {
+  if (loadValue < 92) {
+    loadValue += Math.random() * 7;
+    loadPct.textContent = String(Math.floor(Math.min(loadValue, 92))).padStart(3, '0');
+  }
+}, 90);
+window.addEventListener('error', () => {
+  const t = document.querySelector('.loader-title');
+  if (t) t.textContent = 'LINK FAILED — CHECK NETWORK / WEBGL2';
+});
+
+/* =====================================================================
+   1. RENDERER / SCENE / CAMERA
+   ===================================================================== */
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: false,
+  powerPreference: 'high-performance',
+  stencil: false,
+});
+renderer.setClearColor(0x02040a, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.info.autoReset = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02040a);
+scene.fog = new THREE.FogExp2(0x03060d, 0.026);
+
+const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 220);
+camera.position.set(0, 2.35, 10.8);
+camera.lookAt(0, 0.5, 0);
+
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+const CORE_Y = 0.45;
+const CORE_POS = new THREE.Vector3(0, CORE_Y, 0);
+const MAX_CHARGE = 5;
+
+/* =====================================================================
+   2. SHADERS
+   ===================================================================== */
+const NOISE = /* glsl */`
+  float hash31(vec3 p){
+    p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+  float vnoise(vec3 x){
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash31(i + vec3(0,0,0)), hash31(i + vec3(1,0,0)), f.x),
+          mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x),
+          mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y),
+      f.z);
+  }
+  float fbm(vec3 p){
+    float a = 0.5, s = 0.0;
+    for (int i = 0; i < 4; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; }
+    return s;
+  }
+`;
+
+/* ---------- energy core ---------- */
+const coreVert = /* glsl */`
+  uniform float uTime;
+  uniform float uPulse;
+  varying vec3 vN;
+  varying vec3 vView;
+  varying vec3 vPos;
+  varying float vNoise;
+  ${NOISE}
+  void main(){
+    vec3 p = position;
+    float n  = fbm(p * 1.8 + vec3(0.0, uTime * 0.26, uTime * 0.15));
+    float n2 = fbm(p * 4.6 - vec3(uTime * 0.3));
+    float n3 = fbm(p * 9.0 + vec3(uTime * 0.55, 0.0, 0.0));
+    float disp = (n - 0.47) * 0.3 + (n2 - 0.5) * 0.12 + (n3 - 0.5) * 0.04 + uPulse * 0.16;
+    p += normal * disp;
+    vNoise = n * 0.62 + n2 * 0.3 + n3 * 0.12;
+    vPos = p;
+    vec4 wp = modelMatrix * vec4(p, 1.0);
+    vN = normalize(mat3(modelMatrix) * normal);
+    vView = normalize(cameraPosition - wp.xyz);
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+const coreFrag = /* glsl */`
+  uniform float uTime;
+  uniform float uPulse;
+  uniform float uEnergy;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uColorC;
+  varying vec3 vN;
+  varying vec3 vView;
+  varying vec3 vPos;
+  varying float vNoise;
+  void main(){
+    float fres = pow(1.0 - clamp(dot(normalize(vN), normalize(vView)), 0.0, 1.0), 2.2);
+    float ridge = 1.0 - abs(vNoise * 2.0 - 1.0);
+    float cracks = pow(ridge, 30.0);
+    float bleed = pow(ridge, 6.0) * 0.22;
+    float pulseWave = 0.72 + 0.28 * sin(uTime * 2.2 + vPos.y * 3.0);
+    vec3 col = uColorA * 0.5;
+    col += uColorB * cracks * 1.15 * pulseWave;
+    col += uColorC * pow(cracks, 1.6) * 0.85 * pulseWave;
+    col += uColorB * bleed;
+    col *= 0.42 + fres * 1.0;
+    col += uColorB * pow(fres, 2.8) * 1.1;
+    col += uColorC * pow(fres, 3.6) * 0.5;
+    col *= 1.0 + uPulse * 1.3;
+    col *= uEnergy;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+/* ---------- GPU particle vortex ---------- */
+const vortexVert = /* glsl */`
+  attribute vec3 aRand;
+  attribute float aSeed;
+  uniform float uFlow;
+  uniform float uEnergy;
+  uniform float uPixelRatio;
+  varying float vK;
+  varying float vSeed;
+  void main(){
+    float cycle = 10.0;
+    float travel = mod(aRand.z * cycle + uFlow * (0.35 + aRand.y * 0.45), cycle);
+    float k = travel / cycle;
+    float radius = mix(2.7, 0.42, pow(k, 0.72)) * (0.55 + aRand.x * 0.95);
+    float ang = aSeed * 6.28318 + uFlow * (0.4 + aRand.y * 1.3) * (0.35 + k * 0.95);
+    vec3 pos = vec3(cos(ang) * radius, mix(-2.75, 5.7, k), sin(ang) * radius);
+    pos.x += sin(pos.y * 1.35 + uFlow * 0.9 + aSeed * 19.0) * 0.17;
+    pos.z += cos(pos.y * 1.15 + uFlow * 0.8 + aSeed * 13.0) * 0.17;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float size = mix(0.55, 2.1, aRand.x) * (0.3 + 1.6 * k) * (0.75 + 0.25 * uEnergy);
+    gl_PointSize = size * uPixelRatio * (16.0 / max(-mv.z, 0.1));
+    vK = k;
+    vSeed = aSeed;
+  }
+`;
+const vortexFrag = /* glsl */`
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform float uEnergy;
+  varying float vK;
+  varying float vSeed;
+  void main(){
+    vec2 uv = gl_PointCoord - 0.5;
+    float d = length(uv);
+    float alpha = pow(smoothstep(0.5, 0.04, d), 1.9) * sin(vK * 3.14159) * 0.34 * uEnergy;
+    alpha *= 0.3 + vSeed * 0.7;
+    if (alpha < 0.003) discard;
+    vec3 col = mix(uColorA, uColorB, smoothstep(0.0, 0.95, vK));
+    col += vec3(0.5, 0.9, 1.0) * (1.0 - smoothstep(0.0, 0.22, d)) * 0.35;
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
+/* ---------- accretion disc ---------- */
+const discVert = /* glsl */`
+  attribute float aSeed;
+  attribute float aRad;
+  attribute float aY;
+  attribute float aSpeed;
+  attribute float aSize;
+  attribute float aMix;
+  uniform float uTime;
+  uniform float uEnergy;
+  uniform float uPulse;
+  uniform float uPixelRatio;
+  varying vec3 vCol;
+  varying float vA;
+  void main(){
+    float k = pow(aRad, 0.9);
+    float r = mix(2.35, 6.4, k);
+    float w = (0.32 + aSpeed * 0.8) * (1.7 / (r * 0.28 + 0.9));
+    float ang = aSeed * 6.28318 + uTime * w;
+    r += sin(ang * 2.0 + uTime * 0.6 + aSeed * 18.0) * (0.03 + k * 0.13);
+    float h = aY * (0.06 + 0.22 * k) * (1.0 + uPulse * 1.5);
+    vec3 pos = vec3(cos(ang) * r, h, sin(ang) * r);
+    pos.y += sin(ang * 3.0 + aSeed * 9.0 + uTime * 0.5) * 0.02 * k;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float dist = max(-mv.z, 0.6);
+    gl_PointSize = min(aSize * uPixelRatio * (30.0 / dist), 8.0 * uPixelRatio);
+
+    vec3 hot  = vec3(0.5, 0.95, 1.0);
+    vec3 mid  = vec3(0.14, 0.76, 1.0);
+    vec3 cold = vec3(0.5, 0.26, 1.0);
+    vec3 col = mix(hot, mid, smoothstep(0.0, 0.3, k));
+    col = mix(col, cold, smoothstep(0.42, 0.95, k));
+    vCol = col;
+    vA = (0.07 + 0.13 * aMix) * (0.2 + 0.8 * pow(1.0 - k, 1.4)) * uEnergy;
+  }
+`;
+const discFrag = /* glsl */`
+  varying vec3 vCol;
+  varying float vA;
+  void main(){
+    float d = length(gl_PointCoord - 0.5);
+    float a = pow(smoothstep(0.5, 0.0, d), 2.0) * vA;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(vCol + vec3(0.12), a);
+  }
+`;
+
+/* ---------- infall streams ---------- */
+const infallVert = /* glsl */`
+  attribute float aSeed;
+  attribute float aPhase;
+  attribute float aH;
+  attribute float aSize;
+  attribute float aMix;
+  uniform float uTime;
+  uniform float uEnergy;
+  uniform float uPixelRatio;
+  varying vec3 vCol;
+  varying float vA;
+  void main(){
+    float t = fract(aPhase + uTime * 0.13);
+    float r = mix(8.6, 2.1, pow(t, 0.7));
+    float ang = aSeed * 6.28318 + t * 8.0;
+    vec3 pos = vec3(cos(ang) * r, aH * (1.0 - t) * (1.2 + aSeed * 1.9), sin(ang) * r);
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float dist = max(-mv.z, 0.6);
+    gl_PointSize = min(aSize * uPixelRatio * (26.0 / dist), 5.0 * uPixelRatio);
+    vCol = mix(vec3(0.5, 0.28, 1.0), vec3(0.42, 0.95, 1.0), 1.0 - t);
+    vA = sin(t * 3.14159) * (0.05 + 0.1 * aMix) * uEnergy;
+  }
+`;
+const infallFrag = /* glsl */`
+  varying vec3 vCol;
+  varying float vA;
+  void main(){
+    float d = length(gl_PointCoord - 0.5);
+    float a = pow(smoothstep(0.5, 0.0, d), 2.2) * vA;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(vCol, a);
+  }
+`;
+
+/* ---------- instanced shards ---------- */
+const shardVert = /* glsl */`
+  attribute float aPhase;
+  attribute float aRadius;
+  attribute float aSpeed;
+  attribute float aTilt;
+  attribute float aScale;
+  attribute float aMix;
+  uniform float uTime;
+  varying float vFres;
+  varying float vMix;
+  void main(){
+    float ang = aPhase + uTime * aSpeed;
+    float r = aRadius + sin(uTime * 0.85 + aPhase * 3.0) * 0.14;
+    vec3 center = vec3(cos(ang) * r, sin(uTime * 0.7 + aPhase * 2.0) * aTilt, sin(ang) * r);
+    vec3 p = position * aScale;
+    float c = cos(ang * 2.4 + uTime * 0.5);
+    float s = sin(ang * 2.4 + uTime * 0.5);
+    p.xz = mat2(c, -s, s, c) * p.xz;
+    p += center;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vFres = 1.0 - abs(dot(normalize(normalMatrix * normal), normalize(-mv.xyz)));
+    vMix = aMix;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const shardFrag = /* glsl */`
+  varying float vFres;
+  varying float vMix;
+  void main(){
+    vec3 col = mix(vec3(0.03, 0.42, 0.95), vec3(0.42, 0.12, 0.95), vMix);
+    col *= 0.3 + vFres * 1.5;
+    col += vec3(0.55, 0.88, 1.0) * pow(vFres, 4.0) * 0.25;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+/* ---------- floor grid + shockwave ---------- */
+const groundVert = /* glsl */`
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const groundFrag = /* glsl */`
+  varying vec2 vUv;
+  uniform float uTime;
+  uniform float uShock;
+  uniform float uPulse;
+  void main(){
+    vec2 p = (vUv - 0.5) * 70.0;
+    float d = length(p);
+    float fade = smoothstep(34.0, 5.0, d) * smoothstep(0.0, 1.2, d);
+    float phase = fract(d * 0.45 - uTime * 0.07);
+    float ring = smoothstep(0.06, 0.0, min(phase, 1.0 - phase));
+    float ang = atan(p.y, p.x);
+    float spokes = pow(max(cos(ang * 16.0), 0.0), 30.0) * smoothstep(26.0, 2.0, d);
+    vec3 col = vec3(0.025, 0.2, 0.34) * (ring * 0.28 + spokes * 0.2 + 0.03);
+    float sr = uShock * 23.0;
+    float sw = smoothstep(1.7, 0.0, abs(d - sr)) * (1.0 - uShock);
+    col += vec3(0.35, 0.92, 1.0) * sw * 1.7;
+    col += vec3(0.5, 0.22, 1.0) * sw * 0.35;
+    col += vec3(0.05, 0.32, 0.58) * smoothstep(4.5, 0.0, d) * 0.08 * (1.0 + uPulse);
+    gl_FragColor = vec4(col * fade, 1.0);
+  }
+`;
+
+/* ---------- light shafts ---------- */
+const shaftVert = /* glsl */`
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const shaftFrag = /* glsl */`
+  varying vec2 vUv;
+  uniform float uTime;
+  uniform float uPhase;
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  void main(){
+    float edge = smoothstep(0.0, 0.24, vUv.x) * smoothstep(1.0, 0.76, vUv.x);
+    float vfade = smoothstep(0.0, 0.42, vUv.y) * smoothstep(1.0, 0.5, vUv.y);
+    float flow = 0.55 + 0.45 * sin(vUv.y * 24.0 - uTime * 1.7 + vUv.x * 14.0 + uPhase);
+    float a = edge * vfade * flow * uOpacity;
+    gl_FragColor = vec4(uColor * a, a);
+  }
+`;
+
+/* ---------- sparks ---------- */
+const sparkVert = /* glsl */`
+  attribute vec3 aDir;
+  attribute float aSpeed;
+  attribute float aSeed;
+  attribute float aSize;
+  uniform float uT;
+  uniform float uPixelRatio;
+  varying float vA;
+  varying float vSeed;
+  void main(){
+    float life = 0.55 + aSeed * 1.25;
+    float k = clamp(uT / life, 0.0, 1.0);
+    float alive = step(uT, life);
+    float t = uT;
+    vec3 p = aDir * (2.0 + aSpeed * 11.0) * (t - t * t * 0.34);
+    p.y -= 5.6 * t * t;
+    p.x += sin(t * 9.0 + aSeed * 21.0) * 0.28 * t;
+    p.z += cos(t * 7.4 + aSeed * 15.0) * 0.28 * t;
+
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = alive * aSize * (1.0 - k) * uPixelRatio * (92.0 / max(-mv.z, 0.1));
+    vA = (1.0 - k) * alive;
+    vSeed = aSeed;
+    vA *= 0.35 + aSeed * 0.65;
+  }
+`;
+const sparkFrag = /* glsl */`
+  uniform float uEnergy;
+  varying float vA;
+  varying float vSeed;
+  void main(){
+    if (vA <= 0.01) discard;
+    vec2 uv = gl_PointCoord - 0.5;
+    float d = length(uv);
+    float a = smoothstep(0.5, 0.0, d);
+    a *= a;
+    vec3 hot = mix(vec3(1.0, 0.78, 0.42), vec3(0.45, 0.92, 1.0), smoothstep(0.25, 1.0, vSeed));
+    gl_FragColor = vec4(hot, a * vA * uEnergy);
+  }
+`;
+
+/* ---------- stars ---------- */
+const starVert = /* glsl */`
+  attribute float aSize;
+  attribute float aSeed;
+  uniform float uTime;
+  uniform float uPixelRatio;
+  varying float vTw;
+  void main(){
+    vTw = 0.55 + 0.45 * sin(uTime * 1.4 + aSeed * 6.28318);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = aSize * uPixelRatio * (300.0 / max(-mv.z, 1.0));
+  }
+`;
+const starFrag = /* glsl */`
+  varying float vTw;
+  void main(){
+    vec2 uv = gl_PointCoord - 0.5;
+    float d = length(uv);
+    float a = smoothstep(0.5, 0.0, d);
+    a = pow(a, 2.0) * vTw * 0.5;
+    if (a < 0.01) discard;
+    vec3 col = mix(vec3(0.55, 0.8, 1.0), vec3(0.85, 0.75, 1.0), fract(vTw * 3.7));
+    gl_FragColor = vec4(col, a);
+  }
+`;
+
+/* ---------- final composite ---------- */
+const FinalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+    uFlash: { value: 0 },
+    uAberr: { value: 0.35 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform vec2 uRes;
+    uniform float uTime;
+    uniform float uFlash;
+    uniform float uAberr;
+    varying vec2 vUv;
+    float rand(vec2 co){ return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 c = vUv - 0.5;
+      float r2 = dot(c, c);
+      vec2 off = c * (0.0012 + uAberr * 0.006) * (0.35 + r2 * 3.2);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + off).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - off).b;
+
+      col += vec3(0.55, 0.86, 1.0) * uFlash;
+      col *= smoothstep(1.0, 0.12, r2 * 1.72);
+
+      float n = rand(vUv * uRes + fract(uTime) * 91.7);
+      col += (n - 0.5) * 0.038;
+      col *= 1.0 - 0.024 * (0.5 + 0.5 * sin(vUv.y * uRes.y * 1.7));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+
+/* =====================================================================
+   3. WORLD
+   ===================================================================== */
+const world = new THREE.Group();
+scene.add(world);
+
+/* ----- ambient stars ----- */
+const STAR_COUNT = 2600;
+const starGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(STAR_COUNT * 3);
+  const size = new Float32Array(STAR_COUNT);
+  const seed = new Float32Array(STAR_COUNT);
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const r = 42 + Math.random() * 60;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.cos(phi) * 0.65;
+    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    size[i] = 0.22 + Math.random() * 0.62;
+    seed[i] = Math.random();
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  starGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  starGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+}
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uPixelRatio: { value: 1 } },
+  vertexShader: starVert,
+  fragmentShader: starFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const stars = new THREE.Points(starGeo, starMat);
+stars.frustumCulled = false;
+scene.add(stars);
+
+/* ----- energy core ----- */
+const coreGroup = new THREE.Group();
+coreGroup.position.copy(CORE_POS);
+world.add(coreGroup);
+
+const coreUniforms = {
+  uTime: { value: 0 },
+  uPulse: { value: 0 },
+  uEnergy: { value: 1 },
+  uColorA: { value: new THREE.Color(0x05081f) },
+  uColorB: { value: new THREE.Color(0x1fe4ff) },
+  uColorC: { value: new THREE.Color(0xdafcff) },
+};
+const core = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(1.9, 24),
+  new THREE.ShaderMaterial({
+    uniforms: coreUniforms,
+    vertexShader: coreVert,
+    fragmentShader: coreFrag,
+  })
+);
+coreGroup.add(core);
+
+const innerGlow = new THREE.Mesh(
+  new THREE.SphereGeometry(0.62, 32, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0x9fefff,
+    transparent: true,
+    opacity: 0.5,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+coreGroup.add(innerGlow);
+
+/* plasma corona shell */
+const coronaMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uEnergy: { value: 1 },
+    uPulse: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vN;
+    varying vec3 vView;
+    void main(){
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vN = normalize(mat3(modelMatrix) * normal);
+      vView = normalize(cameraPosition - wp.xyz);
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform float uTime;
+    uniform float uEnergy;
+    uniform float uPulse;
+    varying vec3 vN;
+    varying vec3 vView;
+    void main(){
+      float f = 1.0 - clamp(dot(normalize(vN), normalize(vView)), 0.0, 1.0);
+      float rim = pow(f, 3.6);
+      float flick = 0.82 + 0.18 * sin(uTime * 3.4);
+      vec3 col = mix(vec3(0.04, 0.42, 1.0), vec3(0.55, 0.24, 1.0), smoothstep(0.3, 1.0, f));
+      float a = rim * 0.22 * flick * uEnergy * (1.0 + uPulse * 1.6);
+      gl_FragColor = vec4(col, a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const corona = new THREE.Mesh(new THREE.SphereGeometry(2.02, 64, 48), coronaMat);
+coreGroup.add(corona);
+
+const cage = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(2.18, 1),
+  new THREE.MeshBasicMaterial({
+    color: 0x67e9ff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.11,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+cage.visible = false;
+
+const ringMatA = new THREE.MeshBasicMaterial({
+  color: 0x62e9ff,
+  transparent: true,
+  opacity: 0.55,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+const ringMatB = new THREE.MeshBasicMaterial({
+  color: 0xa17bff,
+  transparent: true,
+  opacity: 0.45,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+const ringA = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.012, 8, 160), ringMatA);
+const ringB = new THREE.Mesh(new THREE.TorusGeometry(3.15, 0.008, 8, 160), ringMatB);
+ringA.rotation.set(1.15, 0.2, 0.35);
+ringB.rotation.set(1.62, -0.4, -0.5);
+coreGroup.add(ringA, ringB);
+
+/* ----- vortex particles ----- */
+const VORTEX_MAX = 70000;
+const vortexGeo = new THREE.BufferGeometry();
+{
+  const zeros = new Float32Array(VORTEX_MAX * 3);
+  const rand = new Float32Array(VORTEX_MAX * 3);
+  const seed = new Float32Array(VORTEX_MAX);
+  for (let i = 0; i < VORTEX_MAX; i++) {
+    rand[i * 3] = Math.random();
+    rand[i * 3 + 1] = Math.random();
+    rand[i * 3 + 2] = Math.random();
+    seed[i] = Math.random();
+  }
+  vortexGeo.setAttribute('position', new THREE.BufferAttribute(zeros, 3));
+  vortexGeo.setAttribute('aRand', new THREE.BufferAttribute(rand, 3));
+  vortexGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  vortexGeo.setDrawRange(0, VORTEX_MAX);
+}
+const vortexMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uFlow: { value: 0 },
+    uEnergy: { value: 1 },
+    uPixelRatio: { value: 1 },
+    uColorA: { value: new THREE.Color(0x37d6ff) },
+    uColorB: { value: new THREE.Color(0xa074ff) },
+  },
+  vertexShader: vortexVert,
+  fragmentShader: vortexFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const vortex = new THREE.Points(vortexGeo, vortexMat);
+vortex.frustumCulled = false;
+vortex.visible = false;
+world.add(vortex);
+
+/* ----- accretion disc + infall streams ----- */
+function makeDotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.32, 'rgba(255,255,255,.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const dotTex = makeDotTexture();
+
+const discGroup = new THREE.Group();
+discGroup.rotation.set(-0.46, 0.0, 0.12);
+discGroup.position.y = CORE_Y;
+world.add(discGroup);
+
+const DISC_MAX = 34000;
+const discGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(DISC_MAX * 3);
+  const seed = new Float32Array(DISC_MAX);
+  const rad = new Float32Array(DISC_MAX);
+  const yOff = new Float32Array(DISC_MAX);
+  const speed = new Float32Array(DISC_MAX);
+  const size = new Float32Array(DISC_MAX);
+  const mix = new Float32Array(DISC_MAX);
+  for (let i = 0; i < DISC_MAX; i++) {
+    seed[i] = Math.random();
+    rad[i] = Math.random();
+    yOff[i] = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+    speed[i] = Math.random();
+    size[i] = 0.7 + Math.pow(Math.random(), 2.2) * 2.4;
+    mix[i] = Math.random();
+  }
+  discGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  discGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  discGeo.setAttribute('aRad', new THREE.BufferAttribute(rad, 1));
+  discGeo.setAttribute('aY', new THREE.BufferAttribute(yOff, 1));
+  discGeo.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  discGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  discGeo.setAttribute('aMix', new THREE.BufferAttribute(mix, 1));
+  discGeo.setDrawRange(0, DISC_MAX);
+}
+const discMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uEnergy: { value: 1 },
+    uPulse: { value: 0 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: discVert,
+  fragmentShader: discFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const disc = new THREE.Points(discGeo, discMat);
+disc.frustumCulled = false;
+discGroup.add(disc);
+
+const INFALL_MAX = 18000;
+const infallGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(INFALL_MAX * 3);
+  const seed = new Float32Array(INFALL_MAX);
+  const phase = new Float32Array(INFALL_MAX);
+  const h = new Float32Array(INFALL_MAX);
+  const size = new Float32Array(INFALL_MAX);
+  const mix = new Float32Array(INFALL_MAX);
+  for (let i = 0; i < INFALL_MAX; i++) {
+    seed[i] = Math.random();
+    phase[i] = Math.random();
+    h[i] = Math.random() * 2 - 1;
+    size[i] = 0.4 + Math.random() * 1.5;
+    mix[i] = Math.random();
+  }
+  infallGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  infallGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  infallGeo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  infallGeo.setAttribute('aH', new THREE.BufferAttribute(h, 1));
+  infallGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  infallGeo.setAttribute('aMix', new THREE.BufferAttribute(mix, 1));
+  infallGeo.setDrawRange(0, INFALL_MAX);
+}
+const infallMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uEnergy: { value: 1 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: infallVert,
+  fragmentShader: infallFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const infall = new THREE.Points(infallGeo, infallMat);
+infall.frustumCulled = false;
+discGroup.add(infall);
+
+/* ----- orbital rings + energy beads ----- */
+const rings = [];
+[
+  { r: 3.0, gx: -0.30, gy: 0.0, gz: 0.14, color: 0x6fe9ff, spin: 0.42, beads: 46 },
+  { r: 4.3, gx: -0.46, gy: 0.14, gz: -0.16, color: 0xa07bff, spin: -0.3, beads: 60 },
+  { r: 5.8, gx: -0.16, gy: -0.1, gz: 0.28, color: 0x4fd0ff, spin: 0.2, beads: 72 },
+].forEach((cfg) => {
+  const g = new THREE.Group();
+  g.rotation.set(cfg.gx, cfg.gy, cfg.gz);
+  g.position.y = CORE_Y;
+
+  const torus = new THREE.Mesh(
+    new THREE.TorusGeometry(cfg.r, 0.009, 6, 240),
+    new THREE.MeshBasicMaterial({
+      color: cfg.color,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  torus.rotation.x = Math.PI / 2;
+  g.add(torus);
+
+  const N = cfg.beads;
+  const bp = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    bp[i * 3] = Math.cos(a) * cfg.r;
+    bp[i * 3 + 1] = Math.sin(a) * cfg.r;
+    bp[i * 3 + 2] = 0;
+  }
+  const bgeo = new THREE.BufferGeometry();
+  bgeo.setAttribute('position', new THREE.BufferAttribute(bp, 3));
+  const bmat = new THREE.PointsMaterial({
+    color: cfg.color,
+    size: 0.19,
+    map: dotTex,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  const beads = new THREE.Points(bgeo, bmat);
+  beads.rotation.x = Math.PI / 2;
+  g.add(beads);
+
+  world.add(g);
+  rings.push({ group: g, beads, mat: bmat, spin: cfg.spin });
+});
+
+/* ----- energy arcs core -> rings ----- */
+const ARC_COUNT = 5;
+const ARC_POINTS = 16;
+const ARC_SEGS = ARC_POINTS - 1;
+const arcGeo = new THREE.BufferGeometry();
+const arcPositions = new Float32Array(ARC_COUNT * ARC_SEGS * 2 * 3);
+arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPositions, 3));
+const arcMat = new THREE.LineBasicMaterial({
+  color: 0xadf8ff,
+  transparent: true,
+  opacity: 0.22,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+const arcs = new THREE.LineSegments(arcGeo, arcMat);
+arcs.frustumCulled = false;
+world.add(arcs);
+
+/* ----- ambient glow sprites ----- */
+const backdropA = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: dotTex,
+  color: 0x0b2a86,
+  transparent: true,
+  opacity: 0.16,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+backdropA.scale.set(34, 20, 1);
+backdropA.position.set(0, 2.4, -20);
+world.add(backdropA);
+
+const backdropB = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: dotTex,
+  color: 0x4a1a9e,
+  transparent: true,
+  opacity: 0.14,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+backdropB.scale.set(24, 16, 1);
+backdropB.position.set(-9, 5.5, -16);
+world.add(backdropB);
+
+const coreHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: dotTex,
+  color: 0x35d6ff,
+  transparent: true,
+  opacity: 0.22,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+coreHalo.scale.set(8, 8, 1);
+coreHalo.position.copy(CORE_POS);
+world.add(coreHalo);
+
+const baseGlow = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({
+    map: dotTex,
+    color: 0x0d3f86,
+    transparent: true,
+    opacity: 0.22,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+baseGlow.rotation.x = -Math.PI / 2;
+baseGlow.scale.set(20, 20, 1);
+baseGlow.position.y = -3.6;
+world.add(baseGlow);
+
+/* ----- orbiting shards ----- */
+const SHARD_COUNT = 90;
+const shardGeo = new THREE.InstancedBufferGeometry();
+{
+  const base = new THREE.OctahedronGeometry(1, 0);
+  shardGeo.index = base.index;
+  shardGeo.setAttribute('position', base.getAttribute('position'));
+  shardGeo.setAttribute('normal', base.getAttribute('normal'));
+  shardGeo.instanceCount = SHARD_COUNT;
+
+  const phase = new Float32Array(SHARD_COUNT);
+  const radius = new Float32Array(SHARD_COUNT);
+  const speed = new Float32Array(SHARD_COUNT);
+  const tilt = new Float32Array(SHARD_COUNT);
+  const scale = new Float32Array(SHARD_COUNT);
+  const mix = new Float32Array(SHARD_COUNT);
+
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    phase[i] = Math.random() * Math.PI * 2;
+    radius[i] = 2.6 + Math.random() * 2.1;
+    speed[i] = (0.12 + Math.random() * 0.34) * (Math.random() > 0.5 ? 1 : -1);
+    tilt[i] = 0.4 + Math.random() * 1.5;
+    scale[i] = 0.012 + Math.random() * 0.028;
+    mix[i] = Math.random();
+  }
+
+  shardGeo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phase, 1));
+  shardGeo.setAttribute('aRadius', new THREE.InstancedBufferAttribute(radius, 1));
+  shardGeo.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(speed, 1));
+  shardGeo.setAttribute('aTilt', new THREE.InstancedBufferAttribute(tilt, 1));
+  shardGeo.setAttribute('aScale', new THREE.InstancedBufferAttribute(scale, 1));
+  shardGeo.setAttribute('aMix', new THREE.InstancedBufferAttribute(mix, 1));
+}
+const shardMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: shardVert,
+  fragmentShader: shardFrag,
+});
+const shards = new THREE.Mesh(shardGeo, shardMat);
+shards.frustumCulled = false;
+world.add(shards);
+
+/* ----- spark burst ----- */
+const SPARK_MAX = 2200;
+const sparkGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(SPARK_MAX * 3);
+  const dir = new Float32Array(SPARK_MAX * 3);
+  const speed = new Float32Array(SPARK_MAX);
+  const seed = new Float32Array(SPARK_MAX);
+  const size = new Float32Array(SPARK_MAX);
+
+  for (let i = 0; i < SPARK_MAX; i++) {
+    const v = new THREE.Vector3(
+      Math.random() * 2 - 1,
+      Math.random() * 1.25 - 0.3,
+      Math.random() * 2 - 1
+    ).normalize();
+    dir[i * 3] = v.x;
+    dir[i * 3 + 1] = v.y;
+    dir[i * 3 + 2] = v.z;
+    speed[i] = Math.random();
+    seed[i] = Math.random();
+    size[i] = 0.7 + Math.random() * 1.9;
+  }
+  sparkGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  sparkGeo.setAttribute('aDir', new THREE.BufferAttribute(dir, 3));
+  sparkGeo.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  sparkGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  sparkGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  sparkGeo.setDrawRange(0, SPARK_MAX);
+}
+const sparkMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uT: { value: 99 },
+    uEnergy: { value: 1 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: sparkVert,
+  fragmentShader: sparkFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const sparks = new THREE.Points(sparkGeo, sparkMat);
+sparks.position.copy(CORE_POS);
+sparks.frustumCulled = false;
+world.add(sparks);
+
+/* ----- blast ring + flash sphere ----- */
+const blastRingMat = new THREE.MeshBasicMaterial({
+  color: 0xa8f4ff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+const blastRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1.0, 128), blastRingMat);
+blastRing.rotation.x = -Math.PI / 2 - 0.30;
+blastRing.position.set(0, CORE_Y, 0);
+world.add(blastRing);
+
+const blastRing2Mat = new THREE.MeshBasicMaterial({
+  color: 0x9a7bff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+const blastRing2 = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.0, 128), blastRing2Mat);
+blastRing2.rotation.x = -Math.PI / 2 - 0.30;
+blastRing2.position.set(0, CORE_Y + 0.1, 0);
+world.add(blastRing2);
+
+const flashSphereMat = new THREE.MeshBasicMaterial({
+  color: 0xc8fbff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+const flashSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), flashSphereMat);
+flashSphere.position.copy(CORE_POS);
+world.add(flashSphere);
+
+/* =====================================================================
+   4. POST PROCESSING
+   ===================================================================== */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.3, 0.92);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const finalPass = new ShaderPass(FinalShader);
+finalPass.uniforms.uAberr.value = 0.35;
+composer.addPass(finalPass);
+
+/* =====================================================================
+   5. QUALITY / RESIZE
+   ===================================================================== */
+const QUALITY_PRESETS = {
+  high: { dpr: Math.min(window.devicePixelRatio || 1, 2), vortex: 42000, disc: 34000, infall: 18000, sparks: 2200, bloom: true, label: 'HIGH' },
+  medium: { dpr: Math.min(window.devicePixelRatio || 1, 1.5), vortex: 20000, disc: 16000, infall: 8000, sparks: 1200, bloom: true, label: 'MEDIUM' },
+  low: { dpr: 1, vortex: 7000, disc: 6000, infall: 3000, sparks: 600, bloom: false, label: 'ECO' },
+};
+
+let qualityMode = 'auto';     // auto | ultra | eco
+let effectiveQuality = 'high';
+let currentDpr = 1;
+let fps = 60;
+let lowFpsStrikes = 0;
+
+function applyQualitySettings() {
+  const p = QUALITY_PRESETS[effectiveQuality];
+  currentDpr = p.dpr;
+  renderer.setPixelRatio(currentDpr);
+  composer.setPixelRatio(currentDpr);
+
+  vortexGeo.setDrawRange(0, p.vortex);
+  discGeo.setDrawRange(0, p.disc);
+  infallGeo.setDrawRange(0, p.infall);
+  sparkGeo.setDrawRange(0, p.sparks);
+  bloom.enabled = p.bloom;
+  vortexMat.uniforms.uPixelRatio.value = currentDpr;
+  discMat.uniforms.uPixelRatio.value = currentDpr;
+  infallMat.uniforms.uPixelRatio.value = currentDpr;
+  sparkMat.uniforms.uPixelRatio.value = currentDpr;
+  starMat.uniforms.uPixelRatio.value = currentDpr;
+
+  resize();
+
+  document.querySelectorAll('.seg button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.q === qualityMode);
+  });
+  $('hud-quality').textContent = p.label;
+  $('hud-quality').classList.toggle('warn', effectiveQuality === 'low');
+}
+
+function applyQuality(mode) {
+  qualityMode = mode;
+  if (mode === 'ultra') effectiveQuality = 'high';
+  else if (mode === 'eco') effectiveQuality = 'low';
+  else effectiveQuality = 'high';
+  applyQualitySettings();
+}
+
+function degradeQuality() {
+  if (effectiveQuality === 'high') effectiveQuality = 'medium';
+  else if (effectiveQuality === 'medium') effectiveQuality = 'low';
+  else return;
+  applyQualitySettings();
+}
+
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  const buf = new THREE.Vector2();
+  renderer.getDrawingBufferSize(buf);
+  finalPass.uniforms.uRes.value.copy(buf);
+}
+
+window.addEventListener('resize', resize);
+
+/* =====================================================================
+   6. INTERACTION STATE
+   ===================================================================== */
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+let charge = 0;
+let overloading = false;
+let autoMode = true;
+let autoTimer = 0;
+let burstT = 99;
+let shockT = 99;
+let pulse = 0;
+let flash = 0;
+let shake = 0;
+let detonations = 0;
+
+const intensityEl = $('intensity');
+const intensityValEl = $('intensity-val');
+const sliderToEnergy = (v) => 0.2 + (v / 100) * 1.4;
+let energy = sliderToEnergy(Number(intensityEl.value));
+let flowTime = 0;
+
+function applyEnergy(v) {
+  energy = sliderToEnergy(v);
+  intensityValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  coreUniforms.uEnergy.value = energy;
+  coronaMat.uniforms.uEnergy.value = energy;
+  vortexMat.uniforms.uEnergy.value = energy;
+  discMat.uniforms.uEnergy.value = energy;
+  infallMat.uniforms.uEnergy.value = energy;
+  sparkMat.uniforms.uEnergy.value = energy;
+}
+intensityEl.addEventListener('input', () => applyEnergy(Number(intensityEl.value)));
+
+const pipsEl = [...$('pips').children];
+const statusEl = $('status');
+const chargeNumEl = $('charge-num');
+const bannerEl = $('banner');
+
+function updateChargeHud() {
+  pipsEl.forEach((p, i) => p.classList.toggle('on', i < charge));
+  chargeNumEl.textContent = `${charge}/${MAX_CHARGE}`;
+  statusEl.textContent = overloading ? 'CRITICAL' : charge >= 3 ? 'CHARGING' : 'STABLE';
+  statusEl.classList.toggle('hot', charge >= 3 || overloading);
+}
+
+function showBanner() {
+  bannerEl.classList.remove('show');
+  void bannerEl.offsetWidth;
+  bannerEl.classList.add('show');
+}
+
+/* =====================================================================
+   7. AUDIO (WebAudio, no assets)
+   ===================================================================== */
+let audioCtx = null;
+let muted = false;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) audioCtx = new Ctx();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playBoom(big) {
+  if (!audioCtx || audioCtx.state !== 'running' || muted) return;
+  const t0 = audioCtx.currentTime;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = big ? 'sawtooth' : 'sine';
+  osc.frequency.setValueAtTime(big ? 155 : 110, t0);
+  osc.frequency.exponentialRampToValueAtTime(big ? 27 : 36, t0 + (big ? 1.15 : 0.55));
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(big ? 0.3 : 0.16, t0 + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + (big ? 1.25 : 0.62));
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 1.3);
+
+  const dur = big ? 0.8 : 0.38;
+  const buffer = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    const k = i / data.length;
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - k, 3.2);
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(big ? 2600 : 1300, t0);
+  filter.frequency.exponentialRampToValueAtTime(170, t0 + dur);
+  const ng = audioCtx.createGain();
+  ng.gain.value = big ? 0.42 : 0.2;
+  src.connect(filter).connect(ng).connect(audioCtx.destination);
+  src.start(t0);
+}
+
+/* =====================================================================
+   8. DETONATE
+   ===================================================================== */
+function detonateVisuals(big) {
+  burstT = 0;
+  shockT = 0;
+  pulse = big ? 2.4 : 1.0;
+  flash = (big ? 0.22 : 0.09) * (0.65 + energy * 0.35);
+  shake = big ? 0.55 : 0.2;
+  autoTimer = 0;
+  detonations++;
+
+  // blast ring setup
+  const r = big ? 1.1 : 0.8;
+  blastRing.scale.setScalar(r);
+  blastRing2.scale.setScalar(r);
+  flashSphere.scale.setScalar(0.7);
+
+  playBoom(big);
+
+  if (big) {
+    bloom.strength = 0.95 * energy;
+    showBanner();
+  } else {
+    bloom.strength = 0.62 * energy;
+  }
+}
+
+function fire() {
+  if (overloading) return;
+  detonateVisuals(false);
+  charge = Math.min(charge + 1, MAX_CHARGE);
+  updateChargeHud();
+
+  if (charge >= MAX_CHARGE) {
+    overloading = true;
+    updateChargeHud();
+    window.setTimeout(() => {
+      detonateVisuals(true);
+      charge = 0;
+      overloading = false;
+      updateChargeHud();
+    }, 220);
+  }
+}
+
+/* =====================================================================
+   9. EVENTS
+   ===================================================================== */
+function onPointerDown(e) {
+  ensureAudio();
+  if (e.target.closest && e.target.closest('button')) return;
+  fire();
+}
+
+canvas.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointerdown', (e) => {
+  if (e.target === canvas) return;
+  ensureAudio();
+}, { passive: true });
+
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+  pointer.ty = -(e.clientY / window.innerHeight - 0.5) * 2;
+}, { passive: true });
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    ensureAudio();
+    fire();
+  } else if (e.key === '1') applyQuality('auto');
+  else if (e.key === '2') applyQuality('ultra');
+  else if (e.key === '3') applyQuality('eco');
+  else if (e.key.toLowerCase() === 'm') toggleSound();
+  else if (e.key.toLowerCase() === 'a') toggleAuto();
+});
+
+function toggleSound() {
+  muted = !muted;
+  const btn = $('sound-btn');
+  btn.classList.toggle('muted', muted);
+  btn.textContent = muted ? '×' : '♪';
+  if (!muted) ensureAudio();
+}
+
+function toggleAuto() {
+  autoMode = !autoMode;
+  const btn = $('auto-btn');
+  btn.style.color = autoMode ? '#6ff2ff' : 'rgba(120,150,170,.5)';
+  btn.style.borderColor = autoMode ? 'rgba(120,235,255,.55)' : 'rgba(120,220,255,.2)';
+  autoTimer = 0;
+}
+
+$('sound-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
+$('auto-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleAuto(); });
+document.querySelectorAll('.seg button').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    applyQuality(btn.dataset.q);
+  });
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) clock.getDelta();
+});
+
+/* =====================================================================
+   10. FRAME LOOP
+   ===================================================================== */
+let frameSamples = 0;
+let sampleTime = 0;
+let hudTime = 0;
+let activeTime = 0;
+const camLook = new THREE.Vector3(0, CORE_Y, 0);
+const shakeVec = new THREE.Vector3();
+
+/* lightning arcs between core and rings */
+const arcPoints = new Float32Array(ARC_POINTS * 3);
+const arcA = new THREE.Vector3();
+const arcB = new THREE.Vector3();
+function updateArcs(time) {
+  let o = 0;
+  for (let a = 0; a < ARC_COUNT; a++) {
+    const seed = a * 2.399;
+    const ringR = 2.6 + (a % 3) * 1.25;
+    const ang = seed + time * (0.28 + (a % 4) * 0.07);
+    const theta = seed * 1.7 + Math.sin(time * 0.6 + a) * 0.6;
+    const phi = 0.55 + Math.sin(time * 0.45 + a * 1.7) * 0.6;
+    arcA.set(
+      Math.sin(phi) * Math.cos(theta) * 1.9,
+      Math.cos(phi) * 1.9 + CORE_Y,
+      Math.sin(phi) * Math.sin(theta) * 1.9
+    );
+    arcB.set(
+      Math.cos(ang) * ringR,
+      Math.sin(ang * 0.5 + time * 0.3) * 0.5 + CORE_Y,
+      Math.sin(ang) * ringR
+    );
+    for (let i = 0; i < ARC_POINTS; i++) {
+      const t = i / ARC_SEGS;
+      const bow = Math.sin(t * Math.PI);
+      arcPoints[i * 3] =
+        arcA.x + (arcB.x - arcA.x) * t + Math.sin(t * 11.0 + time * 7.2 + seed) * 0.16 * bow;
+      arcPoints[i * 3 + 1] =
+        arcA.y + (arcB.y - arcA.y) * t + Math.cos(t * 9.0 + time * 5.6 + seed * 2.0) * 0.2 * bow;
+      arcPoints[i * 3 + 2] =
+        arcA.z + (arcB.z - arcA.z) * t + Math.sin(t * 13.0 - time * 6.4 + seed * 3.0) * 0.16 * bow;
+    }
+    for (let i = 0; i < ARC_SEGS; i++) {
+      arcPositions[o++] = arcPoints[i * 3];
+      arcPositions[o++] = arcPoints[i * 3 + 1];
+      arcPositions[o++] = arcPoints[i * 3 + 2];
+      arcPositions[o++] = arcPoints[(i + 1) * 3];
+      arcPositions[o++] = arcPoints[(i + 1) * 3 + 1];
+      arcPositions[o++] = arcPoints[(i + 1) * 3 + 2];
+    }
+  }
+  arcGeo.attributes.position.needsUpdate = true;
+  arcMat.opacity = 0.16 + 0.12 * (0.5 + 0.5 * Math.sin(time * 8.0)) + pulse * 0.4;
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  activeTime += dt;
+
+  // post-burst timers
+  if (burstT < 99) burstT += dt;
+  if (shockT < 99) shockT += dt;
+  autoTimer += dt;
+
+  // auto demo
+  if (autoMode && autoTimer > 4.2 - energy * 1.5) fire();
+
+  // pointer smoothing
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3.2);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3.2);
+
+  // core
+  coreUniforms.uTime.value = elapsed;
+  coreUniforms.uPulse.value = pulse;
+  coronaMat.uniforms.uTime.value = elapsed;
+  coronaMat.uniforms.uPulse.value = pulse;
+  pulse = Math.max(0, pulse - dt * 2.6);
+
+  const breathe = 1 + Math.sin(elapsed * 2.1) * 0.022;
+  coreGroup.scale.setScalar(breathe + pulse * 0.05);
+  innerGlow.scale.setScalar(0.52 + Math.sin(elapsed * 3.4) * 0.05 + pulse * 0.25);
+  innerGlow.material.opacity = 0.16 + Math.sin(elapsed * 5.0) * 0.04;
+
+  core.rotation.y += dt * 0.09;
+  core.rotation.x = Math.sin(elapsed * 0.25) * 0.12;
+  cage.rotation.y -= dt * 0.16;
+  cage.rotation.z += dt * 0.05;
+  ringA.rotation.z += dt * 0.42;
+  ringB.rotation.z -= dt * 0.3;
+
+  // particles
+  flowTime += dt * (0.4 + energy * 0.6);
+  vortexMat.uniforms.uFlow.value = flowTime;
+  discMat.uniforms.uTime.value = elapsed;
+  discMat.uniforms.uPulse.value = pulse;
+  infallMat.uniforms.uTime.value = elapsed;
+  shardMat.uniforms.uTime.value = elapsed;
+  starMat.uniforms.uTime.value = elapsed;
+  sparkMat.uniforms.uT.value = burstT;
+
+  // orbital rings + arcs
+  rings.forEach((r) => { r.beads.rotation.z += dt * r.spin * (0.55 + energy * 0.65); });
+  updateArcs(elapsed);
+
+  // blast ring expansion
+  const t = Math.min(1, burstT / 1.15);
+  const ease = 1 - Math.pow(1 - t, 3);
+  blastRing.scale.setScalar(0.8 + ease * 6.2);
+  blastRing2.scale.setScalar(0.8 + ease * 4.4);
+  blastRingMat.opacity = (1 - t) * 0.5;
+  blastRing2Mat.opacity = (1 - t) * 0.32;
+
+  flashSphere.scale.setScalar(0.7 + ease * 2.4);
+  flashSphereMat.opacity = Math.pow(1 - t, 2.6) * 0.16;
+
+  // bloom settling
+  const targetBloom = effectiveQuality === 'low' ? 0 : 0.42 * energy;
+  bloom.strength += (targetBloom - bloom.strength) * Math.min(1, dt * 2.5);
+
+  // camera
+  const driftX = Math.sin(elapsed * 0.17) * 0.35;
+  const driftY = Math.cos(elapsed * 0.21) * 0.14;
+  const targetX = driftX + pointer.x * 1.45;
+  const targetY = 4.7 + driftY + pointer.y * 0.9;
+  const targetZ = 12.4 + Math.sin(elapsed * 0.13) * 0.3;
+
+  camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 2.0);
+  camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 2.0);
+  camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 2.0);
+
+  shake = Math.max(0, shake - dt * 2.4);
+  const s = shake * shake;
+  shakeVec.set(
+    (Math.random() - 0.5) * s,
+    (Math.random() - 0.5) * s,
+    (Math.random() - 0.5) * s * 0.4
+  );
+  camLook.set(0, CORE_Y, 0);
+  camera.lookAt(camLook);
+  camera.position.add(shakeVec);
+  camera.rotation.z += Math.sin(elapsed * 0.5) * 0.002 + (Math.random() - 0.5) * s * 0.03;
+
+  // post
+  flash = Math.max(0, flash - dt * 2.2);
+  finalPass.uniforms.uTime.value = elapsed;
+  finalPass.uniforms.uFlash.value = flash;
+  finalPass.uniforms.uAberr.value = 0.35 + pulse * 0.9;
+
+  // hud timing
+  frameSamples++;
+  sampleTime += dt;
+  if (sampleTime >= 0.5) {
+    fps = frameSamples / sampleTime;
+    frameSamples = 0;
+    sampleTime = 0;
+    updateTelemetry();
+  }
+
+  renderer.info.reset();
+  composer.render();
+}
+
+/* =====================================================================
+   11. HUD
+   ===================================================================== */
+function updateTelemetry() {
+  const p = QUALITY_PRESETS[effectiveQuality];
+  const totalParts = p.vortex + p.disc + p.infall + p.sparks + STAR_COUNT;
+  $('hud-fps').textContent = fps.toFixed(0);
+  $('hud-parts').textContent = totalParts > 9999
+    ? (totalParts / 1000).toFixed(1) + 'K'
+    : String(totalParts);
+  $('hud-quality').textContent = p.label;
+  $('hud-fps').className = fps >= 45 ? 'good' : fps >= 28 ? 'warn' : 'bad';
+
+  // adaptive quality: only ever downgrades, only in AUTO, and only after
+  // several consecutive slow samples so a single hitch cannot trigger it
+  if (qualityMode === 'auto' && activeTime > 5.0) {
+    if (fps < 34) lowFpsStrikes++; else lowFpsStrikes = 0;
+    if (lowFpsStrikes >= 3) {
+      degradeQuality();
+      lowFpsStrikes = 0;
+    }
+  }
+}
+
+/* =====================================================================
+   12. INIT
+   ===================================================================== */
+function init() {
+  applyQuality('auto');
+  applyEnergy(Number(intensityEl.value));
+  resize();
+  updateChargeHud();
+  const autoBtn = $('auto-btn');
+  autoBtn.style.color = '#6ff2ff';
+  autoBtn.style.borderColor = 'rgba(120,235,255,.55)';
+
+  // warm up shaders
+  renderer.compile(scene, camera);
+  composer.render();
+
+  loadValue = 100;
+  loadPct.textContent = '100';
+  clearInterval(loadTimer);
+
+  window.setTimeout(() => {
+    loader.classList.add('hidden');
+    document.body.classList.add('ready');
+  }, 420);
+
+  // opening shot
+  window.setTimeout(() => {
+    if (autoMode) fire();
+  }, 1200);
+
+  tick();
+}
+
+init();
+</script>
+</body>
+</html>

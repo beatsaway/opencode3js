@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#030705" />
+<title>SWARM PROTOCOL — Aether Labs</title>
+<meta name="description" content="Forty-five thousand GPU agents with afterimage trails and cohesion morphing. WebGL2 / Three.js." />
+<style>
+  :root{
+    --accent:#7dffc4;
+    --accent2:#54d6ff;
+    --text:#e7f8ef;
+    --dim:#7d9c8f;
+    --line:rgba(125,255,196,.18);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#030705}
+  body{font-family:var(--mono);color:var(--text);-webkit-font-smoothing:antialiased;user-select:none;touch-action:none;cursor:crosshair}
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .topnav{position:absolute;top:26px;left:30px;right:30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(125,255,196,.5);display:grid;place-items:center;transform:rotate(45deg);color:var(--accent);font-size:15px;background:rgba(8,22,16,.5);box-shadow:0 0 28px rgba(80,255,170,.22),inset 0 0 14px rgba(80,255,170,.12)}
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#effff7}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .stats{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.18em;color:var(--dim);border:1px solid var(--line);padding:8px 11px;background:rgba(5,14,10,.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .stats b{color:var(--accent);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats .sep{width:1px;height:9px;background:rgba(125,255,196,.2)}
+  .backlink{pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8px;letter-spacing:.22em;border:1px solid var(--line);padding:8px 11px;background:rgba(5,14,10,.4);transition:color .2s,border-color .2s}
+  .backlink:hover{color:var(--accent);border-color:rgba(125,255,196,.55)}
+
+  .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-size:8px;letter-spacing:.3em;color:rgba(195,230,215,.6);white-space:nowrap;text-shadow:0 1px 14px rgba(0,0,0,.9)}
+  .hint span{color:rgba(125,255,196,.8)}
+
+  .dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(600px,calc(100% - 36px));display:flex;align-items:center;gap:20px;padding:15px 18px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(9,24,17,.66),rgba(3,8,6,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--accent);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(90,255,180,.5)}
+  input.slider{-webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;background:transparent;cursor:ew-resize;touch-action:none}
+  input.slider::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,rgba(125,255,196,.16),rgba(125,255,196,.6) 55%,rgba(84,214,255,.8))}
+  input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:#effff8;border:1px solid #fff;box-shadow:0 0 16px 3px rgba(90,255,180,.6),0 0 28px 6px rgba(84,214,255,.28)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(125,255,196,.2),rgba(84,214,255,.8))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#effff8;border:1px solid #fff}
+  .readout{flex:0 0 auto;text-align:right}
+  .readout .k{font-size:7px;letter-spacing:.22em;color:var(--dim)}
+  .readout .v{font-size:16px;letter-spacing:.06em;color:var(--accent);margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(90,255,180,.5)}
+
+  .scan{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+  .vig{position:fixed;inset:0;z-index:7;pointer-events:none;background:radial-gradient(125% 95% at 50% 50%,transparent 50%,rgba(0,0,0,.62) 100%)}
+
+  #loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(700px 500px at 50% 48%,#07150f,#030705 65%,#010302);transition:opacity .9s ease,visibility .9s}
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-inner{text-align:center;width:min(380px,76vw)}
+  .loader-ring{width:62px;height:62px;margin:0 auto 26px;border-radius:50%;border:1px dashed rgba(125,255,196,.35);border-top-color:var(--accent);box-shadow:0 0 40px rgba(80,255,170,.2);animation:spin 2.2s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-title{font-size:9px;letter-spacing:.4em;color:#eafff4;margin-bottom:16px}
+  .loader-bar{height:1px;background:rgba(125,255,196,.15);overflow:hidden}
+  .loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.3s ease-in-out infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(380%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+
+  @media (max-width:700px){
+    .topnav{top:18px;left:18px;right:18px}
+    .stats{display:none}
+    .brand h1{font-size:11px}
+    .dock{bottom:16px;gap:14px;padding:13px 14px}
+    .hint{bottom:108px;font-size:7px}
+    .readout .v{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="GPU swarm simulation"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="mark"><span>❖</span></div>
+      <div>
+        <h1>SWARM PROTOCOL</h1>
+        <p>45K AGENTS · AFTERIMAGE TRAILS</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="stats">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span>45K AGENTS</span>
+        <span class="sep"></span>
+        <span>TRAILS</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="hint">CLICK TO PULSE <span>· MOVE TO SHIFT PERSPECTIVE</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>COHESION</span><b id="coh-val">060</b></div>
+      <input class="slider" id="coh" type="range" min="0" max="100" step="1" value="60" aria-label="Swarm cohesion" />
+    </div>
+    <div class="readout">
+      <div class="k">HIVE DENSITY</div>
+      <div class="v" id="coh-read">0.74</div>
+    </div>
+  </div>
+</div>
+
+<div class="vig"></div>
+<div class="scan"></div>
+
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-title">WAKING THE SWARM</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>45,000 AGENTS</span><span>∞</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+renderer.setClearColor(0x030705, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030705);
+
+const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 160);
+camera.position.set(0, 3.4, 11.5);
+camera.lookAt(0, 0, 0);
+
+/* =====================================================================
+   swarm
+   ===================================================================== */
+const COUNT = 45000;
+const geo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(COUNT * 3);
+  const seed = new Float32Array(COUNT);
+  const speed = new Float32Array(COUNT);
+  const size = new Float32Array(COUNT);
+  const mix = new Float32Array(COUNT);
+  const v = new THREE.Vector3();
+
+  for (let i = 0; i < COUNT; i++) {
+    // point in a thick shell
+    const theta = Math.random() * Math.PI * 2;
+    const z = Math.random() * 2 - 1;
+    const rxy = Math.sqrt(1 - z * z);
+    const r = 1.45 + Math.pow(Math.random(), 0.55) * 2.5;
+    v.set(rxy * Math.cos(theta), z, rxy * Math.sin(theta)).multiplyScalar(r);
+
+    pos[i * 3] = v.x;
+    pos[i * 3 + 1] = v.y * (0.8 + Math.random() * 0.35);
+    pos[i * 3 + 2] = v.z;
+    seed[i] = Math.random();
+    speed[i] = 0.35 + Math.random() * 1.3;
+    size[i] = 0.4 + Math.pow(Math.random(), 2.0) * 1.7;
+    mix[i] = Math.random();
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  geo.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  geo.setAttribute('aMix', new THREE.BufferAttribute(mix, 1));
+}
+
+const swarmMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uCohesion: { value: 0.74 },
+    uPulse: { value: 0 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aSeed;
+    attribute float aSpeed;
+    attribute float aSize;
+    attribute float aMix;
+    uniform float uTime;
+    uniform float uCohesion;
+    uniform float uPulse;
+    uniform float uPixelRatio;
+    varying vec3 vCol;
+    varying float vA;
+
+    void main(){
+      vec3 p = position;
+      float len = length(p);
+      float coh = uCohesion;
+
+      // cohesion: pull agents toward the hive centre
+      p *= mix(1.28, 0.72, coh);
+
+      // orbital swirl, faster near the core
+      float t = uTime * (0.4 + aSpeed * 0.6);
+      float ang = t * (0.35 + 1.5 / (len + 1.2)) * (0.55 + coh * 0.9);
+      float c = cos(ang), s = sin(ang);
+      p.xz = mat2(c, -s, s, c) * p.xz;
+
+      // organic breathing
+      p += vec3(
+        sin(t * 1.3 + aSeed * 41.0),
+        cos(t * 1.1 + aSeed * 27.0),
+        sin(t * 0.9 + aSeed * 33.0)
+      ) * (0.12 + 0.42 * coh);
+
+      p *= 1.0 + 0.035 * sin(uTime * 1.3 + aSeed * 12.0);
+
+      // click pulse pushes the shell outward
+      p += normalize(p + 0.0001) * uPulse * (0.9 + aSeed * 2.6);
+
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float dist = max(-mv.z, 1.0);
+      gl_PointSize = min(aSize * uPixelRatio * (40.0 / dist) * (0.8 + coh * 0.4), 7.0 * uPixelRatio);
+
+      vec3 mint = vec3(0.35, 1.0, 0.72);
+      vec3 cyan = vec3(0.25, 0.78, 1.0);
+      vec3 violet = vec3(0.6, 0.35, 1.0);
+      vec3 col = mix(mint, cyan, smoothstep(0.15, 0.6, aMix));
+      col = mix(col, violet, smoothstep(0.75, 1.0, aMix) * 0.6);
+      vCol = col;
+      vA = 0.1 + 0.16 * aSeed;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vCol;
+    varying float vA;
+    void main(){
+      vec2 uv = gl_PointCoord - 0.5;
+      float d = length(uv);
+      float a = pow(smoothstep(0.5, 0.0, d), 2.3) * vA;
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(vCol + vec3(0.18) * (1.0 - smoothstep(0.0, 0.18, d)), a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const swarm = new THREE.Points(geo, swarmMat);
+swarm.frustumCulled = false;
+scene.add(swarm);
+
+/* ----- hive core ----- */
+const hiveGroup = new THREE.Group();
+scene.add(hiveGroup);
+
+const hiveShell = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(0.62, 1),
+  new THREE.MeshBasicMaterial({
+    color: 0x8dffd0,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.4,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+hiveGroup.add(hiveShell);
+
+const hiveCore = new THREE.Mesh(
+  new THREE.SphereGeometry(0.26, 24, 24),
+  new THREE.MeshBasicMaterial({
+    color: 0xe8fff6,
+    transparent: true,
+    opacity: 0.75,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+hiveGroup.add(hiveCore);
+
+const hiveRing = new THREE.Mesh(
+  new THREE.TorusGeometry(1.35, 0.008, 8, 160),
+  new THREE.MeshBasicMaterial({
+    color: 0x7dffc4,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+hiveRing.rotation.set(1.2, 0.2, 0.4);
+hiveGroup.add(hiveRing);
+
+/* pulse ring (billboarded) */
+const pulseRingMat = new THREE.MeshBasicMaterial({
+  color: 0xa8ffe0,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+const pulseRing = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.0, 128), pulseRingMat);
+scene.add(pulseRing);
+
+/* ----- background stars ----- */
+const starGeo = new THREE.BufferGeometry();
+{
+  const N = 1800;
+  const p = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const r = 40 + Math.random() * 70;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    p[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    p[i * 3 + 1] = r * Math.cos(phi) * 0.8;
+    p[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+}
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+  color: 0x8fc8b6, size: 0.35, transparent: true, opacity: 0.5,
+  depthWrite: false, blending: THREE.AdditiveBlending,
+}));
+scene.add(stars);
+
+/* =====================================================================
+   post
+   ===================================================================== */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const afterimage = new AfterimagePass(0.82);
+composer.addPass(afterimage);
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.42, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const finalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 c = vUv - 0.5;
+      vec2 off = c * 0.0015 * (0.4 + dot(c, c) * 2.2);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + off).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - off).b;
+      col += (rand(vUv * uRes + fract(uTime)) - 0.5) * 0.03;
+      col *= 1.0 - 0.028 * (0.5 + 0.5 * sin(vUv.y * uRes.y * 1.7));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const finalPass = new ShaderPass(finalShader);
+composer.addPass(finalPass);
+
+/* =====================================================================
+   resize / slider / interaction
+   ===================================================================== */
+let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(dpr);
+  composer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  const buf = new THREE.Vector2();
+  renderer.getDrawingBufferSize(buf);
+  finalPass.uniforms.uRes.value.copy(buf);
+  swarmMat.uniforms.uPixelRatio.value = dpr;
+}
+window.addEventListener('resize', resize);
+
+const pointer = { tx: 0, ty: 0, x: 0, y: 0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+  pointer.ty = -(e.clientY / window.innerHeight - 0.5) * 2;
+}, { passive: true });
+
+const cohEl = $('coh');
+const cohValEl = $('coh-val');
+const cohReadEl = $('coh-read');
+let cohesion = 0.74;
+
+function applyCohesion(v) {
+  cohesion = v / 100;
+  swarmMat.uniforms.uCohesion.value = cohesion;
+  cohValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  cohReadEl.textContent = (0.4 + cohesion * 0.6).toFixed(2);
+}
+cohEl.addEventListener('input', () => applyCohesion(Number(cohEl.value)));
+applyCohesion(Number(cohEl.value));
+
+let pulse = 0;
+let pulseAge = 99;
+
+function firePulse() {
+  pulseAge = 0;
+  pulse = 1;
+}
+canvas.addEventListener('pointerdown', firePulse);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); firePulse(); }
+});
+
+/* =====================================================================
+   loop
+   ===================================================================== */
+const clock = new THREE.Clock();
+let elapsed = 0;
+let fps = 60, frames = 0, acc = 0;
+let orbit = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  orbit += dt * 0.07;
+
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 2.4);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 2.4);
+
+  if (pulseAge < 99) pulseAge += dt;
+  pulse = Math.max(0, 1 - pulseAge / 1.1);
+
+  swarmMat.uniforms.uTime.value = elapsed;
+  swarmMat.uniforms.uPulse.value = pulse * pulse;
+
+  // hive
+  hiveShell.rotation.y += dt * 0.4;
+  hiveShell.rotation.x += dt * 0.17;
+  hiveCore.scale.setScalar(1 + Math.sin(elapsed * 3.0) * 0.08 + pulse * 0.5);
+  hiveRing.rotation.z += dt * 0.5;
+  hiveRing.rotation.y -= dt * 0.2;
+
+  // billboard pulse ring
+  const pt = Math.min(1, pulseAge / 1.1);
+  const pe = 1 - Math.pow(1 - pt, 3);
+  pulseRing.scale.setScalar(0.7 + pe * 7.0);
+  pulseRingMat.opacity = (1 - pt) * 0.55 * (pulseAge < 99 ? 1 : 0);
+  pulseRing.quaternion.copy(camera.quaternion);
+
+  // camera orbit with pointer parallax
+  const radius = 15.5 - cohesion * 1.6;
+  camera.position.set(
+    Math.sin(orbit) * radius + pointer.x * 2.2,
+    4.4 + Math.sin(elapsed * 0.18) * 1.2 + pointer.y * 2.0,
+    Math.cos(orbit) * radius
+  );
+  camera.lookAt(0, 0, 0);
+
+  stars.rotation.y = elapsed * 0.003;
+
+  finalPass.uniforms.uTime.value = elapsed;
+  composer.render();
+
+  frames++; acc += dt;
+  if (acc >= 0.5) {
+    fps = frames / acc;
+    $('hud-fps').textContent = fps.toFixed(0);
+    $('hud-fps').style.color = fps >= 45 ? '#9dffd2' : '#ff9b8f';
+    frames = 0; acc = 0;
+  }
+}
+
+function init() {
+  resize();
+  renderer.compile(scene, camera);
+  composer.render();
+  requestAnimationFrame(tick);
+  window.setTimeout(() => loader.classList.add('hidden'), 500);
+}
+init();
+</script>
+</body>
+</html>

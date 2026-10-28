@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#05030b" />
+<title>NEBULA DRIFT — Aether Labs</title>
+<meta name="description" content="A 110,000-point generative spiral nebula with a burning core. Fly through it in WebGL2." />
+<style>
+  :root{
+    --accent:#c78bff;
+    --accent2:#ff5fd2;
+    --text:#efe8fa;
+    --dim:#8e7fa6;
+    --line:rgba(199,139,255,.2);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#05030b}
+  body{font-family:var(--mono);color:var(--text);-webkit-font-smoothing:antialiased;user-select:none;touch-action:none;cursor:crosshair}
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .topnav{position:absolute;top:26px;left:30px;right:30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(199,139,255,.5);display:grid;place-items:center;transform:rotate(45deg);color:var(--accent);font-size:15px;background:rgba(20,12,32,.5);box-shadow:0 0 28px rgba(160,100,255,.25),inset 0 0 14px rgba(160,100,255,.12)}
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#f6efff}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .stats{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.18em;color:var(--dim);border:1px solid var(--line);padding:8px 11px;background:rgba(12,7,20,.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .stats b{color:var(--accent);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats .sep{width:1px;height:9px;background:rgba(199,139,255,.2)}
+  .backlink{pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8px;letter-spacing:.22em;border:1px solid var(--line);padding:8px 11px;background:rgba(12,7,20,.4);transition:color .2s,border-color .2s}
+  .backlink:hover{color:var(--accent);border-color:rgba(199,139,255,.55)}
+
+  .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-size:8px;letter-spacing:.3em;color:rgba(210,195,235,.6);white-space:nowrap;text-shadow:0 1px 14px rgba(0,0,0,.9)}
+  .hint span{color:rgba(199,139,255,.8)}
+
+  .dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(600px,calc(100% - 36px));display:flex;align-items:center;gap:20px;padding:15px 18px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(20,13,32,.66),rgba(7,4,12,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--accent);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(180,110,255,.5)}
+  input.slider{-webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;background:transparent;cursor:ew-resize;touch-action:none}
+  input.slider::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,rgba(199,139,255,.16),rgba(199,139,255,.6) 55%,rgba(255,95,210,.8))}
+  input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:#f7edff;border:1px solid #fff;box-shadow:0 0 16px 3px rgba(180,110,255,.65),0 0 28px 6px rgba(255,95,210,.28)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(199,139,255,.2),rgba(255,95,210,.8))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#f7edff;border:1px solid #fff}
+  .readout{flex:0 0 auto;text-align:right}
+  .readout .k{font-size:7px;letter-spacing:.22em;color:var(--dim)}
+  .readout .v{font-size:16px;letter-spacing:.06em;color:var(--accent);margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(180,110,255,.5)}
+
+  .scan{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+  .vig{position:fixed;inset:0;z-index:7;pointer-events:none;background:radial-gradient(125% 95% at 50% 50%,transparent 50%,rgba(0,0,0,.62) 100%)}
+
+  #loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(700px 500px at 50% 48%,#0e0718,#05030b 65%,#020104);transition:opacity .9s ease,visibility .9s}
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-inner{text-align:center;width:min(380px,76vw)}
+  .loader-ring{width:62px;height:62px;margin:0 auto 26px;border-radius:50%;border:1px solid rgba(199,139,255,.2);border-top-color:var(--accent);border-right-color:rgba(255,95,210,.7);box-shadow:0 0 40px rgba(160,90,255,.22);animation:spin 1.4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-title{font-size:9px;letter-spacing:.4em;color:#f3e9ff;margin-bottom:16px}
+  .loader-bar{height:1px;background:rgba(199,139,255,.15);overflow:hidden}
+  .loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.3s ease-in-out infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(380%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+
+  @media (max-width:700px){
+    .topnav{top:18px;left:18px;right:18px}
+    .stats{display:none}
+    .brand h1{font-size:11px}
+    .dock{bottom:16px;gap:14px;padding:13px 14px}
+    .hint{bottom:108px;font-size:7px}
+    .readout .v{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Generative spiral nebula"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="mark"><span>✳</span></div>
+      <div>
+        <h1>NEBULA DRIFT</h1>
+        <p>110K-POINT GENERATIVE GALAXY</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="stats">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span id="hud-parts">110K PTS</span>
+        <span class="sep"></span>
+        <span>GLSL</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="hint">MOVE TO ORBIT <span>· DRAG WARP TO ACCELERATE</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>WARP DRIVE</span><b id="warp-val">060</b></div>
+      <input class="slider" id="warp" type="range" min="0" max="100" step="1" value="60" aria-label="Warp drive" />
+    </div>
+    <div class="readout">
+      <div class="k">VELOCITY</div>
+      <div class="v" id="warp-read">1.44 c</div>
+    </div>
+  </div>
+</div>
+
+<div class="vig"></div>
+<div class="scan"></div>
+
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-title">IGNITING NEBULA CORE</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>110,000 STARS</span><span>∞</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+renderer.setClearColor(0x05030b, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.98;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05030b);
+scene.fog = new THREE.FogExp2(0x05030b, 0.007);
+
+const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 260);
+camera.position.set(0, 15, 24);
+camera.lookAt(0, 0, 0);
+
+/* =====================================================================
+   galaxy
+   ===================================================================== */
+const COUNT = 110000;
+const DUST = 24000;
+const ARMS = 4;
+
+const galaxyGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(COUNT * 3);       // dummy, required by three
+  const radius = new Float32Array(COUNT);
+  const angle = new Float32Array(COUNT);
+  const yOff = new Float32Array(COUNT);
+  const seed = new Float32Array(COUNT);
+  const mix = new Float32Array(COUNT);
+  const size = new Float32Array(COUNT);
+
+  const randn = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
+  for (let i = 0; i < COUNT; i++) {
+    // disc with a dense core and long arms
+    const r = 0.3 + Math.pow(Math.random(), 0.6) * 18.5;
+    const branch = Math.floor(Math.random() * ARMS);
+    const armAngle = (branch / ARMS) * Math.PI * 2 + r * 0.42;
+    const spread = randn() * (0.10 + r * 0.03) * (0.55 + Math.random() * 0.9);
+    const a = armAngle + spread;
+    const y = randn() * (0.5 + 1.6 / (1.0 + r * 0.45));
+
+    radius[i] = r;
+    angle[i] = a;
+    yOff[i] = y;
+    seed[i] = Math.random();
+    mix[i] = Math.random();
+    size[i] = 0.42 + Math.pow(Math.random(), 3.4) * 2.2;
+    pos[i * 3] = 0;
+  }
+
+  galaxyGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  galaxyGeo.setAttribute('aRadius', new THREE.BufferAttribute(radius, 1));
+  galaxyGeo.setAttribute('aAngle', new THREE.BufferAttribute(angle, 1));
+  galaxyGeo.setAttribute('aY', new THREE.BufferAttribute(yOff, 1));
+  galaxyGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  galaxyGeo.setAttribute('aMix', new THREE.BufferAttribute(mix, 1));
+  galaxyGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+}
+
+const galaxyMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uFlow: { value: 0 },
+    uWarp: { value: 1.4 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aRadius;
+    attribute float aAngle;
+    attribute float aY;
+    attribute float aSeed;
+    attribute float aMix;
+    attribute float aSize;
+    uniform float uFlow;
+    uniform float uWarp;
+    uniform float uPixelRatio;
+    varying vec3 vCol;
+    varying float vAlpha;
+
+    void main(){
+      float r = aRadius;
+      float speed = 0.05 + 0.4 / (r * 0.75 + 1.0);
+      float ang = aAngle + uFlow * speed;
+      vec3 pos = vec3(cos(ang) * r, aY, sin(ang) * r);
+      pos.y += sin(uFlow * 0.5 + aSeed * 18.0 + r * 0.35) * (0.05 + r * 0.012);
+
+      vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float dist = max(-mv.z, 1.0);
+      gl_PointSize = min(aSize * uPixelRatio * (34.0 / dist) * (0.65 + r * 0.02), 9.0 * uPixelRatio);
+
+      float k = clamp(r / 19.5, 0.0, 1.0);
+      vec3 core = vec3(1.0, 0.86, 0.55);
+      vec3 mid  = vec3(1.0, 0.28, 0.6);
+      vec3 edge = vec3(0.26, 0.42, 1.0);
+      vec3 col = mix(core, mid, smoothstep(0.0, 0.34, k));
+      col = mix(col, edge, smoothstep(0.38, 1.0, k));
+      col = mix(col, vec3(0.6, 0.32, 1.0), aMix * 0.5);
+      vCol = col;
+      vAlpha = 0.26 + 0.34 * aMix + 0.12 * sin(uFlow * 1.6 + aSeed * 40.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vCol;
+    varying float vAlpha;
+    void main(){
+      vec2 uv = gl_PointCoord - 0.5;
+      float d = length(uv);
+      float a = pow(smoothstep(0.5, 0.0, d), 2.1) * vAlpha;
+      if (a < 0.01) discard;
+      vec3 c = vCol + vec3(0.35) * (1.0 - smoothstep(0.0, 0.22, d));
+      gl_FragColor = vec4(c, a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const galaxy = new THREE.Points(galaxyGeo, galaxyMat);
+galaxy.frustumCulled = false;
+galaxy.rotation.x = -0.18;
+scene.add(galaxy);
+
+/* ----- dust layer ----- */
+const dustGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(DUST * 3);
+  const radius = new Float32Array(DUST);
+  const angle = new Float32Array(DUST);
+  const yOff = new Float32Array(DUST);
+  const seed = new Float32Array(DUST);
+  const size = new Float32Array(DUST);
+
+  for (let i = 0; i < DUST; i++) {
+    const r = 1.0 + Math.pow(Math.random(), 0.5) * 22.0;
+    radius[i] = r;
+    angle[i] = Math.random() * Math.PI * 2;
+    yOff[i] = (Math.random() - 0.5) * (1.2 + r * 0.22);
+    seed[i] = Math.random();
+    size[i] = 1.2 + Math.random() * 3.4;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  dustGeo.setAttribute('aRadius', new THREE.BufferAttribute(radius, 1));
+  dustGeo.setAttribute('aAngle', new THREE.BufferAttribute(angle, 1));
+  dustGeo.setAttribute('aY', new THREE.BufferAttribute(yOff, 1));
+  dustGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  dustGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+}
+const dustMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uFlow: { value: 0 },
+    uPixelRatio: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aRadius;
+    attribute float aAngle;
+    attribute float aY;
+    attribute float aSeed;
+    attribute float aSize;
+    uniform float uFlow;
+    uniform float uPixelRatio;
+    varying float vA;
+    void main(){
+      float ang = aAngle + uFlow * (0.02 + 0.15 / (aRadius + 1.0));
+      vec3 pos = vec3(cos(ang) * aRadius, aY + sin(uFlow * 0.3 + aSeed * 12.0) * 0.25, sin(ang) * aRadius);
+      vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float dist = max(-mv.z, 1.0);
+      gl_PointSize = min(aSize * uPixelRatio * (26.0 / dist), 16.0 * uPixelRatio);
+      vA = 0.05 + 0.09 * aSeed;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying float vA;
+    void main(){
+      vec2 uv = gl_PointCoord - 0.5;
+      float a = pow(smoothstep(0.5, 0.0, length(uv)), 2.5) * vA;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(vec3(0.35, 0.22, 0.65), a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const dust = new THREE.Points(dustGeo, dustMat);
+dust.frustumCulled = false;
+dust.rotation.x = -0.18;
+scene.add(dust);
+
+/* ----- core glow ----- */
+const glowMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec2 vUv;
+    uniform float uTime;
+    void main(){
+      float d = length(vUv - 0.5) * 2.0;
+      float a = smoothstep(1.0, 0.0, d);
+      a = pow(a, 3.4);
+      float pulse = 0.88 + 0.12 * sin(uTime * 1.4);
+      vec3 c = mix(vec3(1.0, 0.96, 0.86), vec3(1.0, 0.55, 0.25), smoothstep(0.0, 0.55, d));
+      gl_FragColor = vec4(c * a * 1.1 * pulse, a * 0.62);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMat);
+glow.scale.setScalar(4.4);
+glow.position.set(0, 0, 0);
+scene.add(glow);
+
+const glowInner = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMat.clone());
+glowInner.material.uniforms.uTime = glowMat.uniforms.uTime;
+glowInner.scale.setScalar(1.6);
+scene.add(glowInner);
+
+/* ----- distant stars ----- */
+const starGeo = new THREE.BufferGeometry();
+{
+  const N = 2600;
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const r = 60 + Math.random() * 90;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.cos(phi) * 0.7;
+    pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+}
+function makeDotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,.6)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const starMat = new THREE.PointsMaterial({
+  color: 0xa9c8ff,
+  size: 0.9,
+  map: makeDotTexture(),
+  sizeAttenuation: true,
+  transparent: true,
+  opacity: 0.7,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+/* =====================================================================
+   post
+   ===================================================================== */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 0.72);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const finalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 c = vUv - 0.5;
+      vec2 off = c * 0.0014 * (0.4 + dot(c, c) * 2.2);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + off).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - off).b;
+      col += (rand(vUv * uRes + fract(uTime)) - 0.5) * 0.03;
+      col *= 1.0 - 0.028 * (0.5 + 0.5 * sin(vUv.y * uRes.y * 1.7));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const finalPass = new ShaderPass(finalShader);
+composer.addPass(finalPass);
+
+/* =====================================================================
+   resize / interaction
+   ===================================================================== */
+let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(dpr);
+  composer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  const buf = new THREE.Vector2();
+  renderer.getDrawingBufferSize(buf);
+  finalPass.uniforms.uRes.value.copy(buf);
+  galaxyMat.uniforms.uPixelRatio.value = dpr;
+  dustMat.uniforms.uPixelRatio.value = dpr;
+}
+window.addEventListener('resize', resize);
+
+const pointer = { tx: 0, ty: 0, x: 0, y: 0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+  pointer.ty = -(e.clientY / window.innerHeight - 0.5) * 2;
+}, { passive: true });
+
+const warpEl = $('warp');
+const warpValEl = $('warp-val');
+const warpReadEl = $('warp-read');
+let warp = 1.44;
+
+function applyWarp(v) {
+  warp = 0.35 + (v / 100) * 2.1;
+  warpValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  warpReadEl.textContent = warp.toFixed(2) + ' c';
+  galaxyMat.uniforms.uWarp.value = warp;
+}
+warpEl.addEventListener('input', () => applyWarp(Number(warpEl.value)));
+applyWarp(Number(warpEl.value));
+
+/* =====================================================================
+   loop
+   ===================================================================== */
+const clock = new THREE.Clock();
+let flow = 0, elapsed = 0;
+let fps = 60, frames = 0, acc = 0;
+let orbit = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  flow += dt * (0.5 + warp * 0.75);
+  orbit += dt * (0.035 + warp * 0.02);
+
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 2.2);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 2.2);
+
+  galaxyMat.uniforms.uFlow.value = flow;
+  dustMat.uniforms.uFlow.value = flow * 0.8;
+  glowMat.uniforms.uTime.value = elapsed;
+
+  const radius = 33.5 - warp * 1.8 + Math.sin(elapsed * 0.09) * 1.2;
+  camera.position.set(
+    Math.sin(orbit) * radius,
+    20.5 + Math.sin(elapsed * 0.13) * 1.4 + pointer.y * 3.0,
+    Math.cos(orbit) * radius
+  );
+  camera.lookAt(0, 0, 0);
+
+  galaxy.rotation.y = Math.sin(elapsed * 0.04) * 0.05;
+  dust.rotation.y = galaxy.rotation.y * 0.6;
+
+  glow.quaternion.copy(camera.quaternion);
+  glowInner.quaternion.copy(camera.quaternion);
+  glow.rotation.z += 0.0;
+  glowInner.rotation.z += 0.0;
+
+  stars.rotation.y = elapsed * 0.004;
+
+  finalPass.uniforms.uTime.value = elapsed;
+  composer.render();
+
+  frames++; acc += dt;
+  if (acc >= 0.5) {
+    fps = frames / acc;
+    $('hud-fps').textContent = fps.toFixed(0);
+    $('hud-fps').style.color = fps >= 45 ? '#d9b6ff' : '#ff8f8f';
+    frames = 0; acc = 0;
+  }
+}
+
+function init() {
+  resize();
+  renderer.compile(scene, camera);
+  composer.render();
+  requestAnimationFrame(tick);
+  window.setTimeout(() => loader.classList.add('hidden'), 500);
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0a0b14" />
+<title>SOLAR TIDE — Aether Labs</title>
+<meta name="description" content="A stylised Gerstner ocean at sunset: layered swells, sun glitter, crest foam and atmospheric scattering. WebGL2 / Three.js." />
+<style>
+  :root{
+    --accent:#ffc07a;
+    --accent2:#7fd6ff;
+    --text:#f6efe6;
+    --dim:#a89a8c;
+    --line:rgba(255,192,122,.22);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#0a0b14}
+  body{font-family:var(--mono);color:var(--text);-webkit-font-smoothing:antialiased;user-select:none;touch-action:none;cursor:crosshair}
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .topnav{position:absolute;top:26px;left:30px;right:30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(255,192,122,.5);display:grid;place-items:center;transform:rotate(45deg);color:var(--accent);font-size:15px;background:rgba(20,16,18,.45);box-shadow:0 0 28px rgba(255,170,90,.22),inset 0 0 14px rgba(255,170,90,.12)}
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#fff6ea}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .stats{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.18em;color:var(--dim);border:1px solid var(--line);padding:8px 11px;background:rgba(14,11,14,.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .stats b{color:var(--accent);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats .sep{width:1px;height:9px;background:rgba(255,192,122,.22)}
+  .backlink{pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8px;letter-spacing:.22em;border:1px solid var(--line);padding:8px 11px;background:rgba(14,11,14,.4);transition:color .2s,border-color .2s}
+  .backlink:hover{color:var(--accent);border-color:rgba(255,192,122,.6)}
+
+  .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-size:8px;letter-spacing:.3em;color:rgba(240,228,214,.62);white-space:nowrap;text-shadow:0 1px 14px rgba(0,0,0,.9)}
+  .hint span{color:rgba(255,192,122,.9)}
+
+  .dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(600px,calc(100% - 36px));display:flex;align-items:center;gap:20px;padding:15px 18px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(30,20,18,.62),rgba(10,8,10,.5));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--accent);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(255,180,100,.5)}
+  input.slider{-webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;background:transparent;cursor:ew-resize;touch-action:none}
+  input.slider::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,rgba(127,214,255,.5),rgba(255,192,122,.75) 55%,rgba(255,110,90,.9))}
+  input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:#fff6ec;border:1px solid #fff;box-shadow:0 0 16px 3px rgba(255,180,110,.6),0 0 28px 6px rgba(255,120,90,.22)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(127,214,255,.5),rgba(255,110,90,.9))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff6ec;border:1px solid #fff}
+  .readout{flex:0 0 auto;text-align:right}
+  .readout .k{font-size:7px;letter-spacing:.22em;color:var(--dim)}
+  .readout .v{font-size:16px;letter-spacing:.06em;color:var(--accent);margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(255,180,100,.5)}
+
+  .scan{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:.08;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px)}
+  .vig{position:fixed;inset:0;z-index:7;pointer-events:none;background:radial-gradient(120% 95% at 50% 42%,transparent 52%,rgba(0,0,0,.55) 100%)}
+
+  #loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(700px 500px at 50% 45%,#1a1218,#0a0b14 66%,#05060c);transition:opacity .9s ease,visibility .9s}
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-inner{text-align:center;width:min(380px,76vw)}
+  .loader-ring{width:62px;height:62px;margin:0 auto 26px;border-radius:50%;border:1px solid rgba(255,192,122,.2);border-top-color:var(--accent);border-right-color:var(--accent2);box-shadow:0 0 40px rgba(255,170,90,.22);animation:spin 1.1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-title{font-size:9px;letter-spacing:.4em;color:#fff4e6;margin-bottom:16px}
+  .loader-bar{height:1px;background:rgba(255,192,122,.15);overflow:hidden}
+  .loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.3s ease-in-out infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(380%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+
+  @media (max-width:760px){
+    .topnav{top:18px;left:18px;right:18px}
+    .stats{display:none}
+    .brand h1{font-size:11px}
+    .dock{bottom:16px;gap:14px;padding:13px 14px}
+    .hint{bottom:108px;font-size:7px}
+    .readout .v{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Stylised ocean at sunset"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="mark"><span>≈</span></div>
+      <div>
+        <h1>SOLAR TIDE</h1>
+        <p>GERSTNER OCEAN · WEBGL2</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="stats">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span>5 SWELLS</span>
+        <span class="sep"></span>
+        <span id="hud-waves">145K VERTS</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="hint">MOVE TO LOOK AROUND <span>· SLIDE THE SWELL</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>SWELL HEIGHT</span><b id="swell-val">055</b></div>
+      <input class="slider" id="swell" type="range" min="0" max="100" step="1" value="55" aria-label="Swell height" />
+    </div>
+    <div class="readout">
+      <div class="k">SIGNIFICANT</div>
+      <div class="v" id="swell-read">1.4 M</div>
+    </div>
+  </div>
+</div>
+
+<div class="vig"></div>
+<div class="scan"></div>
+
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-title">RAISING THE SWELL</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>OCEAN</span><span>∞</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+renderer.setClearColor(0x0a0b14, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(48, 1, 0.5, 4000);
+camera.position.set(0, 4.8, 30);
+camera.lookAt(0, 2.9, -30);
+
+const SUN = new THREE.Vector3(0.20, 0.085, -1.0).normalize();
+
+/* shared GLSL */
+const SKY_GLSL = /* glsl */`
+  uniform vec3 uSun;
+  vec3 skyTone(vec3 dir){
+    float h = clamp(dir.y, 0.0, 1.0);
+    vec3 zenith  = vec3(0.014, 0.028, 0.082);
+    vec3 mid     = vec3(0.060, 0.090, 0.190);
+    vec3 horizon = vec3(0.470, 0.235, 0.120);
+    vec3 col = mix(horizon, mid, smoothstep(0.0, 0.16, h));
+    col = mix(col, zenith, smoothstep(0.12, 0.85, h));
+
+    float s = max(dot(normalize(dir), normalize(uSun)), 0.0);
+    col += vec3(1.0, 0.36, 0.12) * pow(s, 12.0) * 0.16;
+    col += vec3(1.0, 0.60, 0.26) * pow(s, 160.0) * 0.30;
+    col += vec3(1.0, 0.84, 0.58) * pow(s, 3400.0) * 2.0;
+    return col;
+  }
+`;
+
+/* =====================================================================
+   sky dome
+   ===================================================================== */
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uSun: { value: SUN },
+    uTime: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vDir;
+    void main(){
+      vDir = normalize(position);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vDir;
+    uniform float uTime;
+    ${SKY_GLSL}
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+    }
+    void main(){
+      vec3 dir = normalize(vDir);
+      vec3 col = skyTone(dir);
+
+      // high cirrus, warm near the sun
+      vec2 uv = vec2(atan(dir.z, dir.x) * 1.8, dir.y * 5.5 - uTime * 0.006);
+      float n = noise(uv * 1.6) * 0.6 + noise(uv * 3.7 + 4.0) * 0.3 + noise(uv * 8.1) * 0.1;
+      float band = smoothstep(0.46, 0.78, n) * smoothstep(0.03, 0.20, dir.y) * smoothstep(0.78, 0.20, dir.y);
+      float aim = max(dot(dir, normalize(uSun)), 0.0);
+      vec3 cloud = mix(vec3(0.105, 0.105, 0.155), vec3(0.95, 0.52, 0.28), pow(aim, 3.2));
+      float edge = smoothstep(0.40, 0.78, noise(uv * 3.1 + 9.0));
+      cloud *= mix(0.62, 1.06, edge);
+      col = mix(col, cloud, band * 0.66);
+
+      // horizon warmth band
+      col += vec3(0.30, 0.105, 0.038) * exp(-abs(dir.y) * 30.0) * 0.42;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+  side: THREE.BackSide,
+  depthWrite: false,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 48, 32), skyMat);
+scene.add(sky);
+
+/* =====================================================================
+   ocean
+   ===================================================================== */
+const WAVES = /* glsl */`
+  uniform float uTime;
+  uniform float uAmp;
+  uniform float uChop;
+
+  /* Gerstner wave: sharp crests, pinched troughs, analytic normal terms */
+  /* accumulate without steepness, normalise afterwards so crests never self-intersect */
+  void addWave(vec2 p, vec2 dir, float len, float amp, float speed, float phase, float lod,
+               inout float h, inout vec2 disp,
+               inout float axx, inout float axz, inout float azz,
+               inout float nx, inout float nz,
+               inout float crestA, inout float crestN, inout float steep){
+    float k = 6.28318 / len;
+    float f = k * dot(dir, p) - uTime * speed + phase;
+    float s = sin(f);
+    float c = cos(f);
+    float a = amp * uAmp * lod;
+
+    h += a * c;
+    disp += vec2(a * dir.x * s, a * dir.y * s);
+
+    axx += a * k * dir.x * dir.x * c;
+    axz += a * k * dir.x * dir.y * c;
+    azz += a * k * dir.y * dir.y * c;
+
+    nx += a * k * dir.x * s;
+    nz += a * k * dir.y * s;
+
+    crestA += a * c;
+    crestN += a;
+    steep += a * k;
+  }
+`;
+
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uSun: { value: SUN },
+    uTime: { value: 0 },
+    uAmp: { value: 1.2 },
+    uChop: { value: 0.85 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vWorld;
+    varying vec3 vNormalW;
+    varying float vCrest;
+    varying float vDist;
+    ${WAVES}
+
+    void main(){
+      vec4 wp0 = modelMatrix * vec4(position, 1.0);
+      float dist = length(wp0.xz - cameraPosition.xz);
+
+      /* far field flattens so the plane edge never silhouettes against the sky */
+      float field = 1.0 - smoothstep(210.0, 880.0, dist);
+      float lod1 = field;
+      float lod2 = (1.0 - smoothstep(90.0, 420.0, dist)) * field;
+      float lod3 = (1.0 - smoothstep(30.0, 150.0, dist)) * field;
+
+      float h = 0.0;
+      vec2 disp = vec2(0.0);
+      float axx = 0.0, axz = 0.0, azz = 0.0, nx = 0.0, nz = 0.0;
+      float crestA = 0.0, crestN = 0.0, steep = 0.0;
+
+      addWave(wp0.xz, normalize(vec2(1.0, 0.35)),   62.0, 0.95, 0.62, 0.0, lod1, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+      addWave(wp0.xz, normalize(vec2(0.72, -0.69)), 38.0, 0.52, 0.85, 1.7, lod1, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+      addWave(wp0.xz, normalize(vec2(0.94, 0.34)),  22.0, 0.28, 1.15, 3.1, lod2, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+      addWave(wp0.xz, normalize(vec2(0.55, -0.84)), 13.0, 0.15, 1.50, 4.4, lod3, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+      addWave(wp0.xz, normalize(vec2(0.99, 0.12)),   7.5, 0.075, 2.10, 2.2, lod3, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+      addWave(wp0.xz, normalize(vec2(0.24, 0.97)),   4.6, 0.045, 2.70, 5.3, lod3, h, disp, axx, axz, azz, nx, nz, crestA, crestN, steep);
+
+      float q = clamp(uChop, 0.0, 0.92) / max(steep, 0.0001);
+      disp *= q;
+      axx *= q; axz *= q; azz *= q;
+
+      vec3 world = wp0.xyz + vec3(disp.x, h, disp.y);
+
+      vec3 tx = vec3(1.0 + axx, -nx, axz);
+      vec3 tz = vec3(axz, -nz, 1.0 + azz);
+      vec3 n = normalize(cross(tz, tx));
+
+      vWorld = world;
+      vNormalW = n;
+      vCrest = crestA / max(crestN, 0.0001);
+      vDist = dist;
+      gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying vec3 vWorld;
+    varying vec3 vNormalW;
+    varying float vCrest;
+    varying float vDist;
+    uniform float uTime;
+    uniform float uAmp;
+    ${SKY_GLSL}
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(41.7, 289.3))) * 35758.5453); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+    }
+
+    void main(){
+      vec3 N = normalize(vNormalW);
+      vec3 V = normalize(cameraPosition - vWorld);
+      vec3 L = normalize(uSun);
+
+      // fine ripples for glitter (fades with distance)
+      float rip = sin(vWorld.x * 1.7 + vWorld.z * 2.4 + uTime * 2.3)
+                + sin(vWorld.x * 3.4 - vWorld.z * 1.6 - uTime * 1.9) * 0.7
+                + sin(vWorld.z * 5.1 + vWorld.x * 2.2 + uTime * 3.4) * 0.4
+                + sin(vWorld.x * 9.3 - vWorld.z * 7.1 + uTime * 4.6) * 0.22
+                + sin(vWorld.z * 14.2 + vWorld.x * 5.5 - uTime * 5.8) * 0.14;
+      float ripFade = 1.0 - smoothstep(26.0, 190.0, vDist);
+      N = normalize(N + vec3(rip * 0.026, 0.0, rip * 0.020) * ripFade);
+
+      /* mid-frequency chop that survives out to the horizon */
+      float mid1 = sin(vWorld.x * 0.44 + vWorld.z * 0.63 + uTime * 0.95)
+                 + sin(vWorld.x * 0.78 - vWorld.z * 0.31 - uTime * 1.25) * 0.8
+                 + sin(vWorld.x * 0.19 - vWorld.z * 0.92 + uTime * 0.7) * 0.6;
+      float mid2 = sin(vWorld.z * 0.57 - vWorld.x * 0.38 + uTime * 1.1)
+                 + sin(vWorld.z * 0.91 + vWorld.x * 0.22 - uTime * 0.85) * 0.8
+                 + sin(vWorld.z * 0.24 + vWorld.x * 0.81 - uTime * 1.4) * 0.6;
+      float midFade = 1.0 - smoothstep(160.0, 620.0, vDist);
+      N = normalize(N + vec3(mid1 * 0.030, 0.0, mid2 * 0.026) * midFade);
+
+      /* high-frequency sparkle, close range only */
+      vec2 spUv = vWorld.xz * 2.6 + vec2(uTime * 0.85, -uTime * 0.65);
+      float sp1 = noise(spUv) + noise(spUv * 2.7 + 11.0) * 0.5 - 0.75;
+      float sp2 = noise(spUv + 31.0) + noise(spUv * 3.1 - 7.0) * 0.5 - 0.75;
+      float sparkFade = 1.0 - smoothstep(12.0, 90.0, vDist);
+      N = normalize(N + vec3(sp1, 0.0, sp2) * 0.16 * sparkFade);
+
+      float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.6);
+
+      vec3 R = reflect(-V, N);
+      R.y = abs(R.y);
+      vec3 skyRef = skyTone(R);
+
+      vec3 deep    = vec3(0.005, 0.024, 0.048);
+      vec3 shallow = vec3(0.012, 0.070, 0.092);
+      float crestN = clamp(0.5 + 0.5 * vCrest, 0.0, 1.0);
+      vec3 col = mix(deep, shallow, smoothstep(0.12, 0.9, crestN));
+      col = mix(col, skyRef * vec3(0.70, 0.87, 1.10), 0.015 + fres * 0.44);
+
+      // sun diffuse + specular glitter path
+      float ndl = max(dot(N, L), 0.0);
+      col += vec3(1.0, 0.52, 0.22) * pow(ndl, 3.0) * 0.06;
+
+      vec3 H = normalize(L + V);
+      float ndh = max(dot(N, H), 0.0);
+      float spec = pow(ndh, 1400.0);
+      col += vec3(1.0, 0.74, 0.42) * spec * 2.6;
+      col += vec3(1.0, 0.54, 0.24) * pow(ndh, 80.0) * 0.05;
+
+      // crest translucency
+      float sss = smoothstep(0.58, 0.98, crestN) * (1.0 - fres);
+      col += vec3(0.02, 0.15, 0.13) * sss * 0.7;
+
+      // foam on the sharpest crests
+      float foamNoise = noise(vWorld.xz * vec2(0.35, 1.1) + vec2(uTime * 0.08, -uTime * 0.05));
+      float foamMask = smoothstep(0.82, 1.0, crestN);
+      float foam = foamMask * smoothstep(0.52, 0.9, foamNoise) * (0.10 + uAmp * 0.16);
+      col = mix(col, vec3(0.58, 0.65, 0.70), clamp(foam, 0.0, 0.16));
+
+      // aerial perspective into the horizon
+      float fog = 1.0 - exp(-pow(vDist * 0.0042, 1.6));
+      /* V points from the surface back to the eye: flip it to sample the sky ahead */
+      vec3 horizonCol = skyTone(normalize(vec3(-V.x, 0.0, -V.z)));
+      horizonCol = horizonCol * 1.03 + vec3(0.010, 0.012, 0.014);
+      col = mix(col, horizonCol, clamp(fog, 0.0, 1.0) * 0.99);
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+});
+const ocean = new THREE.Mesh(new THREE.PlaneGeometry(2200, 2200, 460, 460), oceanMat);
+ocean.rotation.x = -Math.PI / 2;
+ocean.position.y = 0;
+scene.add(ocean);
+
+/* =====================================================================
+   post
+   ===================================================================== */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.15, 0.55, 1.05);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* =====================================================================
+   slider
+   ===================================================================== */
+const swellEl = $('swell');
+const swellValEl = $('swell-val');
+const swellReadEl = $('swell-read');
+let swell = 0.55;
+
+function applySwell(v) {
+  swell = v / 100;
+  const amp = 0.55 + swell * 2.35;
+  oceanMat.uniforms.uAmp.value = amp;
+  oceanMat.uniforms.uChop.value = 0.34 + swell * 0.56;
+  swellValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  swellReadEl.textContent = (0.3 + swell * 2.4).toFixed(1) + ' M';
+  bloom.strength = 0.17 + swell * 0.14;
+}
+swellEl.addEventListener('input', () => applySwell(Number(swellEl.value)));
+applySwell(Number(swellEl.value));
+
+/* =====================================================================
+   resize + pointer
+   ===================================================================== */
+let w = 1, h = 1;
+
+function resize() {
+  w = window.innerWidth;
+  h = window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  composer.setPixelRatio(dpr);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / w - 0.5) * 2;
+  pointer.ty = (e.clientY / h - 0.5) * 2;
+}, { passive: true });
+
+/* =====================================================================
+   loop
+   ===================================================================== */
+const clock = new THREE.Clock();
+let elapsed = 0, fps = 60, frames = 0, acc = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 1.8);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 1.8);
+
+  const bob = Math.sin(elapsed * 0.55) * 0.22;
+
+  camera.position.x = -pointer.x * 5.5 + Math.sin(elapsed * 0.11) * 1.6;
+  camera.position.y = 4.8 + bob - pointer.y * 1.4;
+  camera.position.z = 34;
+  camera.lookAt(
+    -pointer.x * 2.4 + Math.sin(elapsed * 0.09) * 0.8,
+    2.9 - pointer.y * 1.2 + Math.sin(elapsed * 0.13) * 0.25,
+    -30
+  );
+
+  oceanMat.uniforms.uTime.value = elapsed;
+  skyMat.uniforms.uTime.value = elapsed;
+  sky.position.copy(camera.position);
+
+  composer.render();
+
+  frames++;
+  acc += dt;
+  if (acc >= 0.5) {
+    fps = frames / acc;
+    $('hud-fps').textContent = fps.toFixed(0);
+    $('hud-fps').style.color = fps >= 48 ? '#ffcf9a' : '#ff8f8f';
+    frames = 0;
+    acc = 0;
+  }
+}
+
+function init() {
+  resize();
+  renderer.compile(scene, camera);
+  composer.render();
+  tick();
+  $('hud-waves').textContent = '212K VERTS';
+  setTimeout(() => loader.classList.add('hidden'), 460);
+}
+init();
+</script>
+</body>
+</html>

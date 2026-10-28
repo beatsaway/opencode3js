@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#08020f" />
+<title>NEON DRIVE — Aether Labs</title>
+<meta name="description" content="An endless procedural synthwave drive: banded sun, mountain silhouettes and a perspective grid. WebGL2." />
+<style>
+  :root{
+    --accent:#ff7bcf;
+    --accent2:#62e8ff;
+    --text:#fff0fa;
+    --dim:#a07c9a;
+    --line:rgba(255,123,207,.2);
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#08020f}
+  body{font-family:var(--mono);color:var(--text);-webkit-font-smoothing:antialiased;user-select:none;touch-action:none;cursor:crosshair}
+  canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .topnav{position:absolute;top:26px;left:30px;right:30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(255,123,207,.5);display:grid;place-items:center;transform:rotate(45deg);color:var(--accent);font-size:15px;background:rgba(30,8,24,.5);box-shadow:0 0 28px rgba(255,90,190,.25),inset 0 0 14px rgba(255,90,190,.12)}
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#fff2fb}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .nav-right{display:flex;align-items:center;gap:14px}
+  .stats{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.18em;color:var(--dim);border:1px solid var(--line);padding:8px 11px;background:rgba(20,6,18,.4);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .stats b{color:var(--accent);font-weight:400;font-variant-numeric:tabular-nums}
+  .stats .sep{width:1px;height:9px;background:rgba(255,123,207,.2)}
+  .backlink{pointer-events:auto;text-decoration:none;color:var(--dim);font-size:8px;letter-spacing:.22em;border:1px solid var(--line);padding:8px 11px;background:rgba(20,6,18,.4);transition:color .2s,border-color .2s}
+  .backlink:hover{color:var(--accent);border-color:rgba(255,123,207,.55)}
+
+  .hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-size:8px;letter-spacing:.3em;color:rgba(240,205,230,.6);white-space:nowrap;text-shadow:0 1px 14px rgba(0,0,0,.9)}
+  .hint span{color:rgba(255,123,207,.8)}
+
+  .dock{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(600px,calc(100% - 36px));display:flex;align-items:center;gap:20px;padding:15px 18px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(30,9,24,.66),rgba(9,2,14,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+  .slider-wrap{flex:1;min-width:0}
+  .slider-top{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;letter-spacing:.26em;color:var(--dim);margin-bottom:9px}
+  .slider-top b{font-weight:400;color:var(--accent);font-size:10px;letter-spacing:.14em;text-shadow:0 0 12px rgba(255,90,190,.55)}
+  input.slider{-webkit-appearance:none;appearance:none;display:block;width:100%;height:16px;background:transparent;cursor:ew-resize;touch-action:none}
+  input.slider::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,rgba(98,232,255,.18),rgba(255,123,207,.65) 55%,rgba(255,190,95,.85))}
+  input.slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;margin-top:-5.5px;border-radius:50%;background:#fff0fa;border:1px solid #fff;box-shadow:0 0 16px 3px rgba(255,90,190,.65),0 0 28px 6px rgba(98,232,255,.28)}
+  input.slider::-moz-range-track{height:2px;background:linear-gradient(90deg,rgba(98,232,255,.2),rgba(255,123,207,.85))}
+  input.slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff0fa;border:1px solid #fff}
+  .readout{flex:0 0 auto;text-align:right}
+  .readout .k{font-size:7px;letter-spacing:.22em;color:var(--dim)}
+  .readout .v{font-size:16px;letter-spacing:.06em;color:var(--accent);margin-top:4px;font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(255,90,190,.5)}
+
+  .scan{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:.14;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+  .vig{position:fixed;inset:0;z-index:7;pointer-events:none;background:radial-gradient(125% 95% at 50% 52%,transparent 50%,rgba(0,0,0,.6) 100%)}
+
+  #loader{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(700px 500px at 50% 48%,#170618,#08020f 65%,#020103);transition:opacity .9s ease,visibility .9s}
+  #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .loader-inner{text-align:center;width:min(380px,76vw)}
+  .loader-ring{width:62px;height:62px;margin:0 auto 26px;border-radius:50%;border:1px solid rgba(255,123,207,.25);border-top-color:var(--accent);border-right-color:rgba(98,232,255,.8);box-shadow:0 0 40px rgba(255,80,190,.22);animation:spin 1.2s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader-title{font-size:9px;letter-spacing:.4em;color:#fff0fa;margin-bottom:16px}
+  .loader-bar{height:1px;background:rgba(255,123,207,.15);overflow:hidden}
+  .loader-bar i{display:block;height:100%;width:35%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.3s ease-in-out infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(380%)}}
+  .loader-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+
+  @media (max-width:700px){
+    .topnav{top:18px;left:18px;right:18px}
+    .stats{display:none}
+    .brand h1{font-size:11px}
+    .dock{bottom:16px;gap:14px;padding:13px 14px}
+    .hint{bottom:108px;font-size:7px}
+    .readout .v{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Procedural synthwave drive"></canvas>
+
+<div class="hud">
+  <header class="topnav">
+    <div class="brand">
+      <div class="mark"><span>▲</span></div>
+      <div>
+        <h1>NEON DRIVE</h1>
+        <p>PROCEDURAL SYNTHWAVE · WEBGL2</p>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="stats">
+        <span><b id="hud-fps">60</b> FPS</span>
+        <span class="sep"></span>
+        <span>INFINITE</span>
+        <span class="sep"></span>
+        <span>2D SHADER</span>
+      </div>
+      <a class="backlink" href="index.html">← INDEX</a>
+    </div>
+  </header>
+
+  <div class="hint">MOVE TO STEER <span>· DRAG VELOCITY</span></div>
+
+  <div class="dock">
+    <div class="slider-wrap">
+      <div class="slider-top"><span>VELOCITY</span><b id="vel-val">060</b></div>
+      <input class="slider" id="vel" type="range" min="0" max="100" step="1" value="60" aria-label="Velocity" />
+    </div>
+    <div class="readout">
+      <div class="k">SPEED</div>
+      <div class="v" id="vel-read">284 KM/H</div>
+    </div>
+  </div>
+</div>
+
+<div class="vig"></div>
+<div class="scan"></div>
+
+<div id="loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-title">ENGAGING NEON DRIVE</div>
+    <div class="loader-bar"><i></i></div>
+    <div class="loader-meta"><span>NO ROAD ENDS</span><span>∞</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('scene');
+const loader = $('loader');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+renderer.setClearColor(0x08020f, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+const uniforms = {
+  uRes: { value: new THREE.Vector2(1, 1) },
+  uTime: { value: 0 },
+  uVelocity: { value: 0.6 },
+  uPointer: { value: new THREE.Vector2(0, 0) },
+};
+
+const material = new THREE.ShaderMaterial({
+  uniforms,
+  extensions: { derivatives: true },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    precision highp float;
+    varying vec2 vUv;
+    uniform vec2 uRes;
+    uniform float uTime;
+    uniform float uVelocity;
+    uniform vec2 uPointer;
+
+    float hash21(vec2 p){
+      p = fract(p * vec2(123.34, 456.21));
+      p += dot(p, p + 45.32);
+      return fract(p.x * p.y);
+    }
+    float vnoise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash21(i), hash21(i + vec2(1, 0)), f.x),
+                 mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), f.x), f.y);
+    }
+    float fbm(vec2 p){
+      float s = 0.0, a = 0.5;
+      for(int i = 0; i < 4; i++){ s += a * vnoise(p); p *= 2.03; a *= 0.5; }
+      return s;
+    }
+
+    void main(){
+      float aspect = uRes.x / max(uRes.y, 1.0);
+      vec2 uv = vUv;
+
+      float speed = 0.25 + uVelocity * 1.9;
+      float t = uTime;
+
+      // steering + speed shake
+      uv.x -= uPointer.x * 0.025 * (0.4 + speed);
+      uv.x += sin(t * 31.0) * 0.0007 * speed + sin(t * 9.0) * 0.0012 * speed;
+      uv.y += sin(t * 23.0) * 0.0005 * speed;
+
+      float horizon = 0.455 + uPointer.y * 0.012;
+
+      // ---------------- sky ----------------
+      float skyT = clamp((uv.y - horizon) / (1.0 - horizon), 0.0, 1.0);
+      vec3 sky = mix(vec3(0.15, 0.02, 0.16), vec3(0.012, 0.004, 0.05), smoothstep(0.0, 0.62, skyT));
+      sky += vec3(1.0, 0.1, 0.42) * exp(-skyT * 13.0) * 0.4;
+      vec3 col = sky;
+
+      // stars
+      if(uv.y > horizon){
+        vec2 sp = uv * vec2(aspect, 1.0) * 42.0;
+        vec2 cell = floor(sp);
+        vec2 f = fract(sp) - 0.5;
+        float h = hash21(cell);
+        float star = smoothstep(0.045, 0.0, length(f)) * step(0.985, h);
+        star *= 0.4 + 0.6 * sin(t * 1.8 + h * 40.0);
+        col += vec3(0.72, 0.8, 1.0) * star * 0.7;
+      }
+
+      // ---------------- sun ----------------
+      vec2 sunP = (uv - vec2(0.5, horizon + 0.155)) * vec2(aspect, 1.0);
+      float sunD = length(sunP);
+      float sunR = 0.132;
+      float sunMask = smoothstep(sunR, sunR - 0.0025, sunD);
+      float bands = step(0.42, fract((sunP.y + 0.2) * 26.0 - t * 0.03));
+      float cut = mix(1.0, bands, smoothstep(0.02, -0.12, sunP.y));
+      vec3 sunCol = mix(vec3(1.0, 0.94, 0.58), vec3(1.0, 0.12, 0.52), smoothstep(-0.13, 0.11, sunP.y));
+      sunCol = mix(sunCol, vec3(1.0, 0.55, 0.15), 0.25);
+      col += sunCol * sunMask * cut * 1.4;
+      col += vec3(1.0, 0.18, 0.45) * exp(-max(sunD - sunR, 0.0) * 12.0) * 0.35;
+
+      // ---------------- mountains ----------------
+      float mRange = 0.055 * fbm(vec2(uv.x * 3.2 + 4.0, 1.7)) + 0.022 * fbm(vec2(uv.x * 11.0, 5.0));
+      float mTop = horizon + 0.012 + mRange;
+      float mountain = smoothstep(mTop, mTop - 0.003, uv.y) * smoothstep(horizon - 0.02, horizon + 0.02, uv.y);
+      vec3 mCol = vec3(0.035, 0.008, 0.08);
+      col = mix(col, mCol, mountain * 0.95);
+      float rim = smoothstep(0.0035, 0.0, abs(uv.y - mTop)) * smoothstep(horizon - 0.01, horizon + 0.02, uv.y);
+      col += vec3(1.0, 0.25, 0.72) * rim * 0.55;
+
+      float mRange2 = 0.035 * fbm(vec2(uv.x * 5.5 + 9.0, 4.4)) + 0.012;
+      float mTop2 = horizon + 0.005 + mRange2;
+      float mountain2 = smoothstep(mTop2, mTop2 - 0.0025, uv.y) * smoothstep(horizon - 0.02, horizon + 0.02, uv.y);
+      col = mix(col, vec3(0.02, 0.004, 0.05), mountain2);
+
+      // ---------------- ground ----------------
+      float below = horizon - uv.y;
+      if(below > 0.0){
+        // base dark ground
+        col = mix(col, vec3(0.012, 0.002, 0.028), smoothstep(0.0, 0.07, below));
+
+        float z = 0.2 / max(below, 0.0001);
+        vec2 gp = vec2((uv.x - 0.5) * z * 1.25, z * 0.55 - t * speed);
+        vec2 fw = fwidth(gp) * 1.15;
+        vec2 gl = abs(fract(gp) - 0.5) / max(fw, vec2(0.0001));
+        float line = 1.0 - min(min(gl.x, gl.y), 1.0);
+        float fade = smoothstep(0.0, 0.05, below) * smoothstep(0.55, 0.06, below);
+        vec3 gridCol = mix(vec3(0.18, 0.95, 1.0), vec3(1.0, 0.12, 0.72), smoothstep(0.0, 0.32, below));
+        col += gridCol * line * (0.35 + 0.9 * smoothstep(0.03, 0.3, below)) * 1.15;
+        col *= 1.0 - 0.25 * smoothstep(0.0, 0.4, below);
+
+        col += vec3(1.0, 0.15, 0.55) * exp(-below * 26.0) * 0.55;
+      }
+
+      // horizon line
+      col += vec3(1.0, 0.3, 0.8) * exp(-abs(uv.y - horizon) * 420.0) * 0.9;
+
+      // vignette
+      float v = length(vUv - 0.5);
+      col *= smoothstep(1.25, 0.2, v * 1.65);
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+});
+
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+quad.frustumCulled = false;
+scene.add(quad);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.9, 0.45, 0.6);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const finalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uRes: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform vec2 uRes;
+    varying vec2 vUv;
+    float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 c = vUv - 0.5;
+      vec2 off = c * 0.0018 * (0.4 + dot(c, c) * 2.4);
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv + off).r;
+      col.g = texture2D(tDiffuse, vUv).g;
+      col.b = texture2D(tDiffuse, vUv - off).b;
+      col += (rand(vUv * uRes + fract(uTime)) - 0.5) * 0.038;
+      col *= 1.0 - 0.03 * (0.5 + 0.5 * sin(vUv.y * uRes.y * 1.7));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const finalPass = new ShaderPass(finalShader);
+composer.addPass(finalPass);
+
+let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(dpr);
+  composer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  const buf = new THREE.Vector2();
+  renderer.getDrawingBufferSize(buf);
+  uniforms.uRes.value.copy(buf);
+  finalPass.uniforms.uRes.value.copy(buf);
+}
+window.addEventListener('resize', resize);
+
+const pointer = { tx: 0, ty: 0, x: 0, y: 0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+  pointer.ty = -(e.clientY / window.innerHeight - 0.5) * 2;
+}, { passive: true });
+
+const velEl = $('vel');
+const velValEl = $('vel-val');
+const velReadEl = $('vel-read');
+let velocity = 0.6;
+
+function applyVelocity(v) {
+  velocity = v / 100;
+  uniforms.uVelocity.value = velocity;
+  velValEl.textContent = String(Math.round(v)).padStart(3, '0');
+  velReadEl.textContent = Math.round(80 + velocity * 340) + ' KM/H';
+}
+velEl.addEventListener('input', () => applyVelocity(Number(velEl.value)));
+applyVelocity(Number(velEl.value));
+
+const clock = new THREE.Clock();
+let elapsed = 0;
+let fps = 60, frames = 0, acc = 0;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 2.4);
+  pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 2.4);
+  uniforms.uPointer.value.set(pointer.x, pointer.y);
+  uniforms.uTime.value = elapsed;
+  finalPass.uniforms.uTime.value = elapsed;
+
+  composer.render();
+
+  frames++; acc += dt;
+  if (acc >= 0.5) {
+    fps = frames / acc;
+    $('hud-fps').textContent = fps.toFixed(0);
+    $('hud-fps').style.color = fps >= 45 ? '#ffb3e2' : '#ff8f8f';
+    frames = 0; acc = 0;
+  }
+}
+
+function init() {
+  resize();
+  renderer.compile(scene, camera);
+  composer.render();
+  requestAnimationFrame(tick);
+  window.setTimeout(() => loader.classList.add('hidden'), 500);
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AETHER LABS — Realtime VFX Collection</title>
+<meta name="description" content="Eight interactive Three.js realtime VFX experiences for games: energy core, black hole, nebula, swarm, synthwave grid, lightning storm, fluid ink and a Gerstner ocean." />
+<style>
+  :root{
+    --bg:#02040a;
+    --panel:rgba(7,14,24,.55);
+    --line:rgba(110,220,255,.16);
+    --text:#d9edf7;
+    --dim:#6e8ca2;
+    --cyan:#6ff2ff;
+    --violet:#a986ff;
+    --mono:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    min-height:100vh;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(900px 600px at 18% -5%, rgba(35,120,180,.22), transparent 60%),
+      radial-gradient(900px 700px at 85% 10%, rgba(130,80,220,.18), transparent 62%),
+      radial-gradient(1000px 800px at 50% 105%, rgba(0,160,220,.12), transparent 65%),
+      linear-gradient(180deg,#03060c,#020409 60%,#03060f);
+  }
+  .bg::before{
+    content:"";position:absolute;inset:0;opacity:.22;
+    background-image:linear-gradient(rgba(90,200,255,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(90,200,255,.10) 1px,transparent 1px);
+    background-size:72px 72px;
+    mask-image:radial-gradient(ellipse at 50% 20%,#000 0%,transparent 70%);
+    -webkit-mask-image:radial-gradient(ellipse at 50% 20%,#000 0%,transparent 70%);
+  }
+  .scan{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:.16;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px)}
+  .wrap{position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:0 32px}
+
+  /* header */
+  header{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:26px 0 0;gap:20px;
+  }
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{
+    width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(111,242,255,.45);
+    display:grid;place-items:center;transform:rotate(45deg);color:var(--cyan);font-size:15px;
+    background:rgba(10,26,40,.5);box-shadow:0 0 26px rgba(80,220,255,.2),inset 0 0 14px rgba(80,220,255,.12);
+  }
+  .mark span{display:block;transform:rotate(-45deg)}
+  .brand h1{font-size:13px;letter-spacing:.3em;font-weight:600;color:#eafcff}
+  .brand p{margin-top:5px;font-size:7.5px;letter-spacing:.28em;color:var(--dim)}
+  .head-meta{display:flex;align-items:center;gap:16px;font-size:8px;letter-spacing:.22em;color:var(--dim)}
+  .live{display:flex;align-items:center;gap:7px;color:#7dffc4}
+  .live i{width:5px;height:5px;border-radius:50%;background:#7dffc4;box-shadow:0 0 9px #7dffc4;animation:blink 1.8s steps(2,end) infinite}
+  @keyframes blink{50%{opacity:.2}}
+
+  /* hero */
+  .hero{padding:110px 0 78px;max-width:900px}
+  .eyebrow{
+    display:flex;align-items:center;gap:12px;font-size:8px;letter-spacing:.32em;color:var(--cyan);
+    text-transform:uppercase;margin-bottom:26px;
+  }
+  .eyebrow::before{content:"";width:34px;height:1px;background:linear-gradient(90deg,var(--cyan),transparent)}
+  .hero h2{
+    font-family:var(--sans);font-size:clamp(42px,7.4vw,86px);line-height:.96;letter-spacing:-.035em;
+    font-weight:600;color:#f2fbff;
+  }
+  .hero h2 em{
+    font-style:normal;
+    background:linear-gradient(94deg,#8ff6ff 0%,#6ff2ff 32%,#a986ff 74%,#ff8fd8 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 60px rgba(100,220,255,.18);
+  }
+  .hero .lede{
+    margin-top:26px;max-width:540px;font-size:11.5px;line-height:1.9;letter-spacing:.06em;color:#8fa9bb;
+  }
+  .hero .lede b{color:#d7ecf7;font-weight:400}
+  .meta-row{display:flex;flex-wrap:wrap;gap:24px;margin-top:34px;font-size:8px;letter-spacing:.24em;color:var(--dim)}
+  .meta-row span{display:flex;align-items:center;gap:8px}
+  .meta-row span::before{content:"";width:4px;height:4px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+
+  /* cards */
+  .demos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;padding-bottom:80px}
+  .card{
+    position:relative;display:flex;flex-direction:column;min-height:380px;
+    border:1px solid var(--line);background:linear-gradient(180deg,rgba(9,18,30,.72),rgba(4,9,16,.55));
+    text-decoration:none;color:inherit;overflow:hidden;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .35s,box-shadow .35s;
+  }
+  .card.featured{grid-column:1 / -1;flex-direction:row;min-height:330px}
+  .card::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(500px 240px at 15% 0%,var(--accent) 0%,transparent 70%);
+    opacity:.07;transition:opacity .35s;
+  }
+  .card:hover{transform:translateY(-5px);border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 40px -12px var(--accent)}
+  .card:hover::after{opacity:.16}
+  .card:hover .launch{color:var(--accent)}
+  .card:hover .launch .arrow{transform:translate(3px,-3px)}
+  .card:hover .thumb i{transform:scale(1.04)}
+
+  .thumb{
+    position:relative;flex:1;min-height:210px;overflow:hidden;
+    background:radial-gradient(120% 100% at 50% 40%,#071220 0%,#03070d 70%);
+    border-bottom:1px solid rgba(110,220,255,.1);
+  }
+  .featured .thumb{flex:1.05;min-height:330px;border-bottom:0;border-right:1px solid rgba(110,220,255,.1)}
+  .thumb::before{
+    content:"";position:absolute;inset:0;opacity:.35;
+    background-image:linear-gradient(rgba(90,200,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(90,200,255,.08) 1px,transparent 1px);
+    background-size:38px 38px;
+    mask-image:radial-gradient(circle at 50% 50%,#000,transparent 75%);
+    -webkit-mask-image:radial-gradient(circle at 50% 50%,#000,transparent 75%);
+  }
+  .thumb i{position:absolute;display:block;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+
+  /* aether art */
+  .orb{
+    width:104px;height:104px;left:50%;top:50%;border-radius:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 38% 32%,#d6ffff 0%,#54e6ff 34%,#0b5cff 68%,#061a4a 100%);
+    box-shadow:0 0 44px 10px rgba(80,220,255,.45),0 0 110px 30px rgba(90,80,255,.25),inset 0 0 26px rgba(255,255,255,.45);
+    filter:saturate(1.25);
+  }
+  .orbit{
+    left:50%;top:50%;width:210px;height:74px;border-radius:50%;
+    border:1px solid rgba(140,240,255,.55);
+    box-shadow:0 0 14px rgba(100,230,255,.28);
+  }
+  .orbit.o1{transform:translate(-50%,-50%) rotate(-18deg)}
+  .orbit.o2{width:250px;height:96px;border-color:rgba(169,134,255,.45);transform:translate(-50%,-50%) rotate(24deg)}
+  .dot-a{width:3px;height:3px;border-radius:50%;background:#bffcff;box-shadow:0 0 10px #8ff2ff}
+  .dot-a:nth-child(4){left:24%;top:38%}
+  .dot-a:nth-child(5){left:74%;top:60%}
+  .dot-a:nth-child(6){left:62%;top:27%;width:2px;height:2px}
+  .dot-a:nth-child(7){left:36%;top:72%;width:2px;height:2px}
+
+  /* portal art */
+  .bh{
+    width:92px;height:92px;left:50%;top:50%;border-radius:50%;
+    transform:translate(-50%,-50%);background:#000;
+    box-shadow:0 0 0 1px rgba(255,170,90,.9),0 0 30px 3px rgba(255,150,60,.55),0 0 80px 20px rgba(255,90,40,.18);
+  }
+  .bh::before{
+    content:"";position:absolute;inset:-26px;border-radius:50%;
+    border:1px dashed rgba(255,170,90,.28);transform:rotate(-16deg);animation:spin 26s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .disk{
+    left:50%;top:50%;width:260px;height:52px;border-radius:50%;
+    transform:translate(-50%,-50%);
+    border:1px solid rgba(255,180,90,.7);
+    box-shadow:0 0 30px rgba(255,140,50,.5),inset 0 0 24px rgba(255,120,40,.4);
+    filter:blur(.3px);
+  }
+  .disk.d2{width:300px;height:16px;border-color:rgba(255,230,180,.5);box-shadow:0 0 24px rgba(255,200,120,.4)}
+  .disk.d3{width:190px;height:110px;border-color:rgba(120,90,255,.3);box-shadow:0 0 40px rgba(120,90,255,.18);transform:translate(-50%,-50%) rotate(8deg)}
+
+  /* nebula art */
+  .cloud{filter:blur(24px);border-radius:50%;opacity:.75}
+  .c1{width:190px;height:140px;left:26%;top:34%;background:radial-gradient(circle,#ff4fd8,transparent 70%)}
+  .c2{width:230px;height:160px;left:46%;top:36%;background:radial-gradient(circle,#5fd8ff,transparent 70%)}
+  .c3{width:150px;height:120px;left:52%;top:44%;background:radial-gradient(circle,#8a5cff,transparent 70%)}
+  .c4{width:90px;height:90px;left:46%;top:40%;background:radial-gradient(circle,#fff2cf,transparent 65%);filter:blur(12px);opacity:.95}
+  .stars{
+    inset:0;opacity:.9;
+    background-image:
+      radial-gradient(1px 1px at 12% 22%,#cfefff,transparent),
+      radial-gradient(1px 1px at 68% 18%,#e8d9ff,transparent),
+      radial-gradient(1px 1px at 82% 72%,#bff4ff,transparent),
+      radial-gradient(1.5px 1.5px at 32% 78%,#fff,transparent),
+      radial-gradient(1px 1px at 54% 12%,#cfefff,transparent),
+      radial-gradient(1px 1px at 88% 42%,#ffd9f4,transparent),
+      radial-gradient(1px 1px at 22% 56%,#bff4ff,transparent),
+      radial-gradient(1px 1px at 44% 88%,#dfe9ff,transparent);
+  }
+
+  /* swarm art */
+  .sw-arm{
+    inset:0;
+    background-image:radial-gradient(circle,rgba(125,255,198,.9) 1px,transparent 1.3px);
+    background-size:13px 13px;
+    mask-image:radial-gradient(circle at 50% 50%,#000 0%,#000 42%,transparent 66%);
+    -webkit-mask-image:radial-gradient(circle at 50% 50%,#000 0%,#000 42%,transparent 66%);
+    transform:rotate(8deg) scale(1.12);
+    opacity:.8;
+  }
+  .sw-core{
+    width:34px;height:34px;left:50%;top:50%;border-radius:50%;transform:translate(-50%,-50%);
+    background:radial-gradient(circle,#eafff5,#4dffb0 40%,rgba(20,120,90,0) 70%);
+    box-shadow:0 0 30px 8px rgba(80,255,180,.45);
+  }
+  .sw-ring{
+    width:150px;height:50px;left:50%;top:50%;border-radius:50%;
+    border:1px solid rgba(125,255,198,.28);transform:translate(-50%,-50%) rotate(-12deg);
+  }
+
+  /* grid art */
+  .sun{
+    width:110px;height:110px;left:50%;top:34%;transform:translate(-50%,-50%);border-radius:50%;
+    background:linear-gradient(180deg,#ffe9a8 0%,#ffb15c 40%,#ff5fa2 70%,#8a3cff 100%);
+    box-shadow:0 0 50px 10px rgba(255,120,120,.35),0 0 100px 30px rgba(140,60,255,.25);
+    overflow:hidden;
+  }
+  .sun::after{
+    content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(180deg,transparent 0 9px,#03060d 9px 13px);
+    opacity:.8;
+  }
+  .floor{
+    left:-20%;right:-20%;bottom:-10%;height:62%;
+    background:
+      repeating-linear-gradient(90deg,rgba(255,80,190,.55) 0 1px,transparent 1px 38px),
+      repeating-linear-gradient(0deg,rgba(120,230,255,.5) 0 1px,transparent 1px 30px);
+    transform:perspective(220px) rotateX(64deg);
+    transform-origin:50% 0%;
+    mask-image:linear-gradient(180deg,transparent 0%,#000 35%,#000 100%);
+    -webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 35%,#000 100%);
+    opacity:.65;
+  }
+  .horizon{
+    left:0;right:0;top:47%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,120,220,.8),transparent);
+    box-shadow:0 0 24px 3px rgba(255,100,220,.3);
+  }
+
+  /* storm art */
+  .storm-sky{
+    inset:0;
+    background:linear-gradient(180deg,#1b2942 0%,#111c2e 28%,#080d16 56%,#04070d 100%);
+  }
+  .storm-cloud{
+    left:-25%;right:-25%;top:-14%;height:64%;
+    background:
+      radial-gradient(45% 90% at 30% 46%,rgba(150,180,235,.30),transparent 72%),
+      radial-gradient(42% 80% at 70% 32%,rgba(110,140,200,.24),transparent 72%);
+    filter:blur(22px);
+  }
+  .bolt-svg{
+    position:absolute;left:50%;top:7%;height:72%;width:100%;
+    transform:translateX(-50%);
+    overflow:visible;
+  }
+  .b-glow{fill:none;stroke:#6f9dff;stroke-width:8;stroke-linejoin:round;stroke-linecap:round;opacity:.6;filter:blur(4px)}
+  .b-core{fill:none;stroke:#eaf2ff;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .storm-flash{
+    left:50%;top:16%;width:190px;height:130px;margin-left:-95px;border-radius:50%;
+    background:radial-gradient(circle,rgba(150,185,255,.35),transparent 70%);
+    filter:blur(16px);
+  }
+  .storm-sea{
+    left:0;right:0;bottom:0;height:30%;
+    background:linear-gradient(180deg,transparent 0%,rgba(18,28,46,.55) 38%,rgba(6,10,18,.96) 100%);
+  }
+  .storm-sea::before{
+    content:"";position:absolute;left:0;right:0;top:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(140,180,255,.45),transparent);
+  }
+  .storm-sea::after{
+    content:"";position:absolute;left:50%;top:0;width:15%;height:100%;
+    transform:translateX(-50%);
+    background:linear-gradient(180deg,rgba(130,170,255,.28),rgba(90,130,220,.04) 58%,transparent);
+    filter:blur(10px);
+  }
+
+  /* fluid art */
+  .ink-base{
+    inset:0;
+    background:radial-gradient(70% 62% at 50% 50%,rgba(52,20,84,.4),transparent 80%);
+  }
+  .ink-swirl{
+    left:50%;top:50%;width:250px;height:250px;margin:-125px 0 0 -125px;border-radius:50%;
+    background:conic-gradient(from 20deg,#0b2b3a,#22d7ff 10%,#5c2ea8 24%,#ff4fb8 40%,#132a4a 54%,#ffc46a 68%,#7a4bff 82%,#22d7ff 100%);
+    filter:blur(26px) saturate(1.5);
+    opacity:.9;
+    animation:spin 28s linear infinite;
+  }
+  .ink-svg{
+    position:absolute;left:-6%;top:-8%;width:112%;height:116%;
+    filter:blur(3.5px) saturate(1.3);
+    mix-blend-mode:screen;
+    opacity:.92;
+  }
+  .ink-swirl.s2{
+    width:150px;height:150px;margin:-75px 0 0 -75px;
+    background:conic-gradient(from 120deg,#ff4fb8,#22d7ff 30%,#ffc46a 54%,#7a4bff 78%,#ff4fb8);
+    filter:blur(15px) saturate(1.7);
+    opacity:.6;
+    animation:spin 17s linear infinite reverse;
+  }
+  .fil{
+    left:50%;top:50%;border-radius:50%;
+    mix-blend-mode:screen;filter:blur(1.6px);
+  }
+  .f1{width:430px;height:186px;margin:-93px 0 0 -215px;border:1.5px solid rgba(46,232,255,.6);transform:rotate(-17deg)}
+  .f2{width:392px;height:168px;margin:-84px 0 0 -196px;border:1.5px solid rgba(255,79,184,.55);transform:rotate(13deg)}
+  .f3{width:334px;height:152px;margin:-76px 0 0 -167px;border:1.5px solid rgba(255,196,106,.45);transform:rotate(-33deg)}
+  .f4{width:296px;height:140px;margin:-70px 0 0 -148px;border:1.5px solid rgba(122,75,255,.55);transform:rotate(28deg)}
+  .wisp{filter:blur(7px);mix-blend-mode:screen;opacity:.5;border-radius:50%}
+  .w1{left:4%;right:4%;top:22%;height:64px;background:linear-gradient(90deg,transparent,rgba(46,232,255,.9),rgba(255,79,184,.65),transparent);transform:rotate(-13deg)}
+  .w2{left:8%;right:8%;top:48%;height:58px;background:linear-gradient(90deg,transparent,rgba(255,196,106,.7),rgba(122,75,255,.85),transparent);transform:rotate(10deg)}
+  .w3{left:6%;right:6%;top:68%;height:50px;background:linear-gradient(90deg,transparent,rgba(255,79,184,.7),rgba(46,232,255,.6),transparent);transform:rotate(-6deg)}
+
+  /* ocean art */
+  .tide-sky{
+    inset:0;
+    background:linear-gradient(180deg,#1d2145 0%,#4a3a63 26%,#a2606a 46%,#e79a63 58%,#f3c07e 64%);
+  }
+  .tide-sun{
+    left:66%;top:52%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+    background:radial-gradient(circle,#fffdf2 0%,#ffe6ac 38%,rgba(255,180,110,.35) 70%,transparent 100%);
+    box-shadow:0 0 60px 20px rgba(255,190,120,.55);
+  }
+  .tide-sea{
+    left:-12%;right:-12%;bottom:0;height:38%;
+    background:linear-gradient(180deg,#c68a5e 0%,#5d6a70 18%,#1a4a55 46%,#082230 100%);
+  }
+  .tide-sea::before{
+    content:"";position:absolute;inset:0;
+    background:
+      repeating-linear-gradient(180deg,rgba(255,255,255,.16) 0 1px,transparent 1px 7px),
+      repeating-linear-gradient(180deg,rgba(120,220,235,.12) 0 2px,transparent 2px 19px);
+    mask-image:linear-gradient(180deg,#000,transparent 92%);
+    -webkit-mask-image:linear-gradient(180deg,#000,transparent 92%);
+    opacity:.6;
+  }
+  .tide-waves{
+    position:absolute;left:-2%;bottom:-2%;width:104%;height:36%;
+    opacity:.62;
+  }
+  .tide-waves path{fill:none;stroke:rgba(205,238,255,.55);stroke-width:1}
+  .tide-waves path.hi{stroke:rgba(255,232,190,.65)}
+  .tide-glint{
+    left:66%;bottom:0;width:9%;height:38%;margin-left:-4.5%;
+    background:linear-gradient(180deg,rgba(255,236,190,.9),rgba(255,182,120,.28) 42%,transparent 92%);
+    filter:blur(11px);
+  }
+
+  /* card body */
+  .card-body{padding:22px 24px 20px;display:flex;flex-direction:column;gap:12px;flex:1}
+  .featured .card-body{flex:1;justify-content:center;padding:34px 38px}
+  .card-top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:7.5px;letter-spacing:.24em;color:var(--dim)}
+  .card-top .num{color:var(--accent)}
+  .tag{border:1px solid rgba(110,220,255,.14);padding:5px 8px;color:rgba(160,200,220,.72);white-space:nowrap}
+  .card h3{
+    font-family:var(--sans);font-size:23px;letter-spacing:-.01em;font-weight:600;color:#f0fbff;
+  }
+  .featured h3{font-size:34px}
+  .card p{font-size:10px;line-height:1.85;letter-spacing:.04em;color:#839caf;max-width:380px}
+  .launch{
+    margin-top:auto;display:flex;align-items:center;gap:9px;padding-top:14px;
+    font-size:8px;letter-spacing:.28em;color:#a9c4d4;transition:color .3s;
+  }
+  .launch .arrow{display:inline-block;transition:transform .3s;color:var(--accent)}
+  .featured .launch{margin-top:8px}
+
+  /* footer */
+  footer{
+    display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;
+    border-top:1px solid rgba(110,220,255,.1);padding:26px 0 42px;font-size:8px;letter-spacing:.22em;color:var(--dim);
+  }
+  footer b{color:#9fc4d8;font-weight:400}
+  .foot-right{display:flex;gap:22px;flex-wrap:wrap}
+
+  @media (max-width:860px){
+    .wrap{padding:0 20px}
+    header{padding-top:20px}
+    .head-meta .hide-sm{display:none}
+    .hero{padding:72px 0 52px}
+    .hero .lede{font-size:10.5px}
+    .meta-row{gap:16px;font-size:7px}
+    .demos{grid-template-columns:1fr;gap:14px;padding-bottom:56px}
+    .card,.card.featured{grid-column:auto;flex-direction:column;min-height:340px}
+    .featured .thumb{flex:1;min-height:220px;border-right:0;border-bottom:1px solid rgba(110,220,255,.1)}
+    .featured .card-body{padding:22px 24px 20px;justify-content:flex-start}
+    .featured h3{font-size:25px}
+    footer{padding-bottom:30px}
+  }
+  @media (max-width:520px){
+    .head-meta{display:none}
+    .hero h2{font-size:clamp(38px,12vw,56px)}
+    .orb{width:82px;height:82px}
+    .orbit{width:160px;height:58px}
+    .orbit.o2{width:190px;height:72px}
+    .disk{width:210px}
+  }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="scan"></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mark"><span>◇</span></div>
+      <div>
+        <h1>AETHER LABS</h1>
+        <p>REALTIME VFX COLLECTION</p>
+      </div>
+    </div>
+    <div class="head-meta">
+      <span class="hide-sm">SHOWCASE 001</span>
+      <span class="hide-sm">THREE.JS r169</span>
+      <span class="live"><i></i>WEBGL2</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">GPU-driven experiments · single-file builds</p>
+      <h2>Realtime VFX<br><em>for games.</em></h2>
+      <p class="lede">
+        Eight interactive WebGL experiences built for the browser: particle cores, gravitational
+        lensing, generative galaxies, swarm intelligence, lightning, fluid dynamics and a sunset ocean.
+        <b>No assets, no frameworks, just shaders.</b>
+      </p>
+      <div class="meta-row">
+        <span>08 EXPERIENCES</span>
+        <span>60–120 FPS</span>
+        <span>CDN + SINGLE FILE</span>
+        <span>POINTER + TOUCH</span>
+      </div>
+    </section>
+
+    <section class="demos" aria-label="VFX demos">
+
+      <a class="card featured" href="aether.html" style="--accent:#6ff2ff">
+        <div class="thumb">
+          <i class="orbit o2"></i>
+          <i class="orbit o1"></i>
+          <i class="orb"></i>
+          <i class="dot-a"></i><i class="dot-a"></i><i class="dot-a"></i><i class="dot-a"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">01 / FEATURED</span><span class="tag">PARTICLES · BLOOM · AUDIO</span></div>
+          <h3>AETHER CORE</h3>
+          <p>A living energy core wrapped in a 70,000-point GPU vortex. Charge the core, trigger shockwaves and push it into overload. Pooled bloom, screen-space aberration, synthesized audio.</p>
+          <span class="launch">LAUNCH EXPERIENCE <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="portal.html" style="--accent:#ffae5c">
+        <div class="thumb">
+          <i class="disk d3"></i>
+          <i class="disk"></i>
+          <i class="disk d2"></i>
+          <i class="bh"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">02</span><span class="tag">RAYMARCH · LENSING</span></div>
+          <h3>EVENT HORIZON</h3>
+          <p>A screen-space black hole with warped starlight, a turbulent accretion disk and a razor-thin photon ring. Drag the mass slider and watch space bend.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="nebula.html" style="--accent:#c78bff">
+        <div class="thumb">
+          <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i><i class="cloud c4"></i>
+          <i class="stars"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">03</span><span class="tag">POINTS · GALAXY</span></div>
+          <h3>NEBULA DRIFT</h3>
+          <p>A 120,000-point spiral nebula with a burning core. Orbit the camera, open the warp drive and fly through a generative star cloud.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="swarm.html" style="--accent:#7dffc4">
+        <div class="thumb">
+          <i class="sw-ring"></i>
+          <i class="sw-arm"></i>
+          <i class="sw-core"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">04</span><span class="tag">TRAILS · COHESION</span></div>
+          <h3>SWARM PROTOCOL</h3>
+          <p>Forty-five thousand GPU agents orbit a hive mind. Afterimage trails drag behind every frame while cohesion pulls the swarm into a dense, breathing sphere.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="grid.html" style="--accent:#ff7bcf">
+        <div class="thumb">
+          <i class="horizon"></i>
+          <i class="sun"></i>
+          <i class="floor"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">05</span><span class="tag">PROCEDURAL · SYNTHWAVE</span></div>
+          <h3>NEON DRIVE</h3>
+          <p>An endless chrome sunset: procedural mountains, a banded sun and a perspective grid that never stops moving. Velocity is yours.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+
+      <a class="card" href="storm.html" style="--accent:#9db8ff">
+        <div class="thumb">
+          <i class="storm-sky"></i>
+          <i class="storm-cloud"></i>
+          <i class="storm-flash"></i>
+          <svg class="bolt-svg" viewBox="0 0 100 160" aria-hidden="true">
+            <polyline class="b-glow" points="60,4 50,44 61,48 43,92 55,96 40,138" />
+            <polyline class="b-core" points="60,4 50,44 61,48 43,92 55,96 40,138" />
+            <polyline class="b-glow" points="50,44 37,62 43,65 33,84" />
+            <polyline class="b-core" points="50,44 37,62 43,65 33,84" />
+            <polyline class="b-glow" points="43,92 58,104 52,107 62,118" />
+            <polyline class="b-core" points="43,92 58,104 52,107 62,118" />
+          </svg>
+          <i class="storm-sea"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">06</span><span class="tag">PROCEDURAL · GPU RAIN</span></div>
+          <h3>ION STORM</h3>
+          <p>Recursive lightning grown from a random seed: forked trunks, cloud-deck flashes, 5,000 GPU raindrops and a strike sea that lights up on impact. Click anywhere to call a bolt.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="fluid.html" style="--accent:#c9a7ff">
+        <div class="thumb">
+          <i class="ink-base"></i>
+          <i class="ink-swirl"></i>
+          <i class="ink-swirl s2"></i>
+          <svg class="ink-svg" viewBox="0 0 200 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+              <linearGradient id="inkA" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#2ee8ff" /><stop offset="100%" stop-color="#ff4fb8" />
+              </linearGradient>
+              <linearGradient id="inkB" x1="1" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ffc46a" /><stop offset="100%" stop-color="#7a4bff" />
+              </linearGradient>
+              <linearGradient id="inkC" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0%" stop-color="#b463ff" /><stop offset="100%" stop-color="#2ee8ff" />
+              </linearGradient>
+            </defs>
+            <g fill="none" stroke-linecap="round">
+              <path d="M14 66 C 40 24, 66 84, 96 44 S 150 20, 188 52" stroke="url(#inkA)" stroke-width="9" />
+              <path d="M22 34 C 54 66, 78 18, 110 62 S 158 74, 194 30" stroke="url(#inkB)" stroke-width="6" />
+              <path d="M8 48 C 44 46, 62 30, 96 30 S 150 66, 192 62" stroke="url(#inkC)" stroke-width="4.5" />
+              <path d="M40 78 C 66 52, 92 64, 118 24 S 168 30, 186 14" stroke="url(#inkA)" stroke-width="3" opacity=".75" />
+              <path d="M30 18 C 58 44, 88 40, 116 66 S 164 54, 190 76" stroke="url(#inkB)" stroke-width="3.5" opacity=".8" />
+            </g>
+          </svg>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">07</span><span class="tag">NAVIER–STOKES · GLSL</span></div>
+          <h3>CHROMA FLUX</h3>
+          <p>A full stable-fluids solver on the GPU: advection, vorticity confinement and 18 Jacobi pressure iterations per frame. Drag to inject luminous ink and watch the vortices curl.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="ocean.html" style="--accent:#ffc07a">
+        <div class="thumb">
+          <i class="tide-sky"></i>
+          <i class="tide-sun"></i>
+          <i class="tide-sea"></i>
+          <svg class="tide-waves" viewBox="0 0 200 70" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 14 Q 25 9 50 14 T 100 14 T 150 14 T 200 14" />
+            <path d="M0 26 Q 30 19 60 26 T 120 26 T 200 26" />
+            <path class="hi" d="M0 40 Q 26 31 52 40 T 104 40 T 156 40 T 208 40" />
+            <path d="M0 54 Q 34 44 68 54 T 136 54 T 204 54" />
+            <path d="M0 66 Q 22 58 44 66 T 88 66 T 132 66 T 200 66" />
+          </svg>
+          <i class="tide-glint"></i>
+        </div>
+        <div class="card-body">
+          <div class="card-top"><span class="num">08</span><span class="tag">GERSTNER · ATMOSPHERE</span></div>
+          <h3>SOLAR TIDE</h3>
+          <p>A six-wave Gerstner ocean with analytic normals, sun glitter, crest foam and atmospheric haze. 212,000 vertices reshape as you drag the swell height from glassy to heavy.</p>
+          <span class="launch">LAUNCH <span class="arrow">↗</span></span>
+        </div>
+      </a>
+    </section>
+  </main>
+
+  <footer>
+    <span><b>AETHER LABS</b> — BUILT FOR THE WEBGL PIPELINE</span>
+    <div class="foot-right">
+      <span>THREE.JS r169</span>
+      <span>GLSL / WEBGL2</span>
+      <span>NO ASSETS</span>
+    </div>
+  </footer>
+</div>
+</body>
+</html>
